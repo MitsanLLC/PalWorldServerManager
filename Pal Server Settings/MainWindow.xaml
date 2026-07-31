@@ -1,0 +1,268 @@
+﻿<Window x:Class="PalWorldServerManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Palworld Server Manager"
+        Height="720"
+        Width="850"
+        MinHeight="600"
+        MinWidth="700">
+
+    <DockPanel Margin="20">
+
+        <!-- Top buttons -->
+        <StackPanel DockPanel.Dock="Top"
+                    Orientation="Horizontal"
+                    Margin="0,0,0,15">
+
+            <Button x:Name="LoadButton"
+                    Content="Load Settings"
+                    Width="150"
+                    Height="40"
+                    Margin="0,0,10,0"
+                    Click="LoadButton_Click"/>
+
+            <Button x:Name="SaveButton"
+                    Content="Save Settings"
+                    Width="150"
+                    Height="40"
+                    IsEnabled="False"
+                    Click="SaveButton_Click"/>
+
+        </StackPanel>
+
+        <!-- Bottom status -->
+        <Border DockPanel.Dock="Bottom"
+                BorderThickness="1"
+                BorderBrush="LightGray"
+                Padding="10"
+                Margin="0,15,0,0">
+
+            <TextBlock x:Name="StatusTextBlock"
+                       Text="No settings file loaded."
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Tabs -->
+        <TabControl>
+
+            <!-- SERVER TAB -->
+            <TabItem Header="Server">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+
+                        <TextBlock Text="Server Information"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Server Name"/>
+                        <TextBox x:Name="ServerNameTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Server Description"/>
+                        <TextBox x:Name="DescriptionTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Maximum Players"/>
+                        <TextBox x:Name="MaxPlayersTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Admin Password"/>
+                        <PasswordBox x:Name="AdminPasswordBox"
+                                     Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Server Password"/>
+                        <PasswordBox x:Name="ServerPasswordBox"
+                                     Margin="0,5,0,15"/>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- GAMEPLAY TAB -->
+            <TabItem Header="Gameplay">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+
+                        <TextBlock Text="Gameplay Rates"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="XP Rate"/>
+                        <TextBox x:Name="ExpRateTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Pal Capture Rate"/>
+                        <TextBox x:Name="PalCaptureRateTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Pal Spawn Rate"/>
+                        <TextBox x:Name="PalSpawnRateTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Daytime Speed Rate"/>
+                        <TextBox x:Name="DayTimeSpeedTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Nighttime Speed Rate"/>
+                        <TextBox x:Name="NightTimeSpeedTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Work Speed Rate"/>
+                        <TextBox x:Name="WorkSpeedTextBox"
+                                 Margin="0,5,0,15"/>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- PVP TAB -->
+            <TabItem Header="PvP &amp; Hardcore">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+
+                        <TextBlock Text="PvP and Hardcore"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+
+                        <CheckBox x:Name="PvpCheckBox"
+                                  Content="Enable PvP"
+                                  Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="HardcoreCheckBox"
+                                  Content="Enable Hardcore Mode"
+                                  Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="FriendlyFireCheckBox"
+                                  Content="Enable Friendly Fire"
+                                  Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="CharacterRecreateCheckBox"
+                                  Content="Allow Character Recreation in Hardcore"
+                                  Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Death Penalty"/>
+
+                        <ComboBox x:Name="DeathPenaltyComboBox"
+                                  IsEditable="True"
+                                  Margin="0,5,0,15">
+
+                            <ComboBoxItem Content="None"/>
+                            <ComboBoxItem Content="Item"/>
+                            <ComboBoxItem Content="ItemAndEquipment"/>
+                            <ComboBoxItem Content="All"/>
+
+                        </ComboBox>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- BASES TAB -->
+            <TabItem Header="Bases &amp; Guilds">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+
+                        <TextBlock Text="Bases and Guilds"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Workers Per Base"/>
+                        <TextBox x:Name="BaseWorkersTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Maximum Guild Players"/>
+                        <TextBox x:Name="GuildPlayersTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Bases Per Guild"/>
+                        <TextBox x:Name="BasesPerGuildTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Maximum Total Base Camps"/>
+                        <TextBox x:Name="BaseCampMaxTextBox"
+                                 Margin="0,5,0,15"/>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- NETWORK TAB -->
+            <TabItem Header="Network">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+
+                        <TextBlock Text="Network Settings"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+
+                        <TextBlock Text="Public IP Address"/>
+                        <TextBox x:Name="PublicIpTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Public Port"/>
+                        <TextBox x:Name="PublicPortTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="RconEnabledCheckBox"
+                                  Content="Enable RCON"
+                                  Margin="0,5,0,15"/>
+
+                        <TextBlock Text="RCON Port"/>
+                        <TextBox x:Name="RconPortTextBox"
+                                 Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="RestApiEnabledCheckBox"
+                                  Content="Enable REST API"
+                                  Margin="0,5,0,15"/>
+
+                        <TextBlock Text="REST API Port"/>
+                        <TextBox x:Name="RestApiPortTextBox"
+                                 Margin="0,5,0,15"/>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ADVANCED TAB -->
+            <TabItem Header="Advanced">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+
+                        <TextBlock Text="Advanced Settings"
+                                   FontSize="20"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+
+                        <CheckBox x:Name="UseAuthCheckBox"
+                                  Content="Require Authentication"
+                                  Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="AllowClientModCheckBox"
+                                  Content="Allow Client Mods"
+                                  Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="BackupSaveDataCheckBox"
+                                  Content="Use Backup Save Data"
+                                  Margin="0,5,0,15"/>
+
+                        <CheckBox x:Name="ShowPlayerListCheckBox"
+                                  Content="Show Player List"
+                                  Margin="0,5,0,15"/>
+
+                        <TextBlock Text="Maximum Chat Posts Per Minute"/>
+                        <TextBox x:Name="ChatPostLimitTextBox"
+                                 Margin="0,5,0,15"/>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+    </DockPanel>
+</Window>
