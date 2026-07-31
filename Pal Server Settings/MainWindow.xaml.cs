@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace PalWorldServerManager
 {
@@ -11,6 +12,25 @@ namespace PalWorldServerManager
     {
         private string? _settingsFilePath;
         private string _fileContents = "";
+
+        private void NavigationButton_Click(
+    object sender,
+    RoutedEventArgs e)
+        {
+            if (sender is not Button button)
+            {
+                return;
+            }
+
+            if (!int.TryParse(
+                    button.Tag?.ToString(),
+                    out int selectedPage))
+            {
+                return;
+            }
+
+            MainNavigationTabControl.SelectedIndex = selectedPage;
+        }
 
         public MainWindow()
         {
@@ -775,4 +795,6 @@ namespace PalWorldServerManager
             return backupPath;
         }
     }
+
+
 }
