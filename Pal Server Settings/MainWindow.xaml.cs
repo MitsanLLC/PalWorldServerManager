@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace PalWorldServerManager
 {
@@ -13,9 +14,14 @@ namespace PalWorldServerManager
         private string? _settingsFilePath;
         private string _fileContents = "";
 
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
         private void NavigationButton_Click(
-    object sender,
-    RoutedEventArgs e)
+            object sender,
+            RoutedEventArgs e)
         {
             if (sender is not Button button)
             {
@@ -32,12 +38,9 @@ namespace PalWorldServerManager
             MainNavigationTabControl.SelectedIndex = selectedPage;
         }
 
-        public MainWindow()
-        {
-            InitializeComponent();
-        }
-
-        private void LoadButton_Click(object sender, RoutedEventArgs e)
+        private void LoadButton_Click(
+            object sender,
+            RoutedEventArgs e)
         {
             OpenFileDialog dialog = new OpenFileDialog
             {
@@ -72,6 +75,8 @@ namespace PalWorldServerManager
 
                 StatusTextBlock.Text =
                     $"Loaded: {_settingsFilePath}";
+
+                UpdateDashboard();
 
                 MessageBox.Show(
                     "Settings loaded successfully.",
@@ -200,6 +205,92 @@ namespace PalWorldServerManager
 
             ChatPostLimitTextBox.Text =
                 GetSettingValue("ChatPostLimitPerMinute");
+        }
+
+        private void UpdateDashboard()
+        {
+            DashboardServerNameText.Text =
+                string.IsNullOrWhiteSpace(ServerNameTextBox.Text)
+                    ? "Unnamed Server"
+                    : ServerNameTextBox.Text;
+
+            DashboardPlayerLimitText.Text =
+                string.IsNullOrWhiteSpace(MaxPlayersTextBox.Text)
+                    ? "—"
+                    : MaxPlayersTextBox.Text;
+
+            DashboardExpRateText.Text =
+                string.IsNullOrWhiteSpace(ExpRateTextBox.Text)
+                    ? "—"
+                    : $"{FormatDashboardDecimal(ExpRateTextBox.Text)}x";
+
+            bool pvpEnabled =
+                PvpCheckBox.IsChecked == true;
+
+            bool hardcoreEnabled =
+                HardcoreCheckBox.IsChecked == true;
+
+            DashboardPvpText.Text =
+                pvpEnabled
+                    ? "Enabled"
+                    : "Disabled";
+
+            DashboardPvpText.Foreground =
+                pvpEnabled
+                    ? GetBrush("SuccessColor")
+                    : GetBrush("MutedTextColor");
+
+            DashboardHardcoreText.Text =
+                hardcoreEnabled
+                    ? "Enabled"
+                    : "Disabled";
+
+            DashboardHardcoreText.Foreground =
+                hardcoreEnabled
+                    ? GetBrush("WarningColor")
+                    : GetBrush("MutedTextColor");
+
+            DashboardGameModeText.Text =
+                hardcoreEnabled
+                    ? "Hardcore"
+                    : pvpEnabled
+                        ? "PvP"
+                        : "Standard";
+
+            DashboardPortText.Text =
+                string.IsNullOrWhiteSpace(PublicPortTextBox.Text)
+                    ? "—"
+                    : PublicPortTextBox.Text;
+
+            DashboardStatusDot.Fill =
+                GetBrush("SuccessColor");
+
+            DashboardStatusTitle.Text =
+                "Settings file loaded";
+
+            DashboardStatusDescription.Text =
+                _settingsFilePath ?? "";
+        }
+
+        private string FormatDashboardDecimal(string text)
+        {
+            if (!double.TryParse(
+                    text,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out double value))
+            {
+                return text;
+            }
+
+            return value.ToString(
+                "0.######",
+                CultureInfo.InvariantCulture);
+        }
+
+        private Brush GetBrush(string resourceName)
+        {
+            return (Brush)FindResource(resourceName);
         }
 
         private string GetSettingValue(string settingName)
@@ -355,7 +446,10 @@ namespace PalWorldServerManager
             if (string.IsNullOrWhiteSpace(_settingsFilePath))
             {
                 MessageBox.Show(
-                    "Load a settings file first.");
+                    "Load a settings file first.",
+                    "No File Loaded",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
 
                 return;
             }
@@ -521,9 +615,10 @@ namespace PalWorldServerManager
 
             try
             {
-                string updatedContents = _fileContents;
+                string updatedContents =
+                    _fileContents;
 
-                // Server
+                // Server settings
                 updatedContents = SetSettingValue(
                     updatedContents,
                     "ServerName",
@@ -536,12 +631,10 @@ namespace PalWorldServerManager
                     DescriptionTextBox.Text,
                     true);
 
-                updatedContents = SetSettingValue(
+                updatedContents = SetIntegerSetting(
                     updatedContents,
                     "ServerPlayerMaxNum",
-                    maxPlayers.ToString(
-                        CultureInfo.InvariantCulture),
-                    false);
+                    maxPlayers);
 
                 updatedContents = SetSettingValue(
                     updatedContents,
@@ -555,7 +648,7 @@ namespace PalWorldServerManager
                     ServerPasswordBox.Password,
                     true);
 
-                // Gameplay
+                // Gameplay settings
                 updatedContents = SetSettingValue(
                     updatedContents,
                     "ExpRate",
@@ -592,7 +685,7 @@ namespace PalWorldServerManager
                     FormatDecimal(workSpeed),
                     false);
 
-                // PvP
+                // PvP and hardcore settings
                 updatedContents = SetBooleanSetting(
                     updatedContents,
                     "bIsPvP",
@@ -619,7 +712,7 @@ namespace PalWorldServerManager
                     DeathPenaltyComboBox.Text.Trim(),
                     false);
 
-                // Bases
+                // Base and guild settings
                 updatedContents = SetIntegerSetting(
                     updatedContents,
                     "BaseCampWorkerMaxNum",
@@ -640,7 +733,7 @@ namespace PalWorldServerManager
                     "BaseCampMaxNum",
                     maximumBaseCamps);
 
-                // Network
+                // Network settings
                 updatedContents = SetSettingValue(
                     updatedContents,
                     "PublicIP",
@@ -672,7 +765,7 @@ namespace PalWorldServerManager
                     "RESTAPIPort",
                     restApiPort);
 
-                // Advanced
+                // Advanced settings
                 updatedContents = SetBooleanSetting(
                     updatedContents,
                     "bUseAuth",
@@ -705,7 +798,10 @@ namespace PalWorldServerManager
                     _settingsFilePath,
                     updatedContents);
 
-                _fileContents = updatedContents;
+                _fileContents =
+                    updatedContents;
+
+                UpdateDashboard();
 
                 StatusTextBlock.Text =
                     $"Saved: {_settingsFilePath}\nBackup: {backupPath}";
@@ -795,6 +891,4 @@ namespace PalWorldServerManager
             return backupPath;
         }
     }
-
-
 }

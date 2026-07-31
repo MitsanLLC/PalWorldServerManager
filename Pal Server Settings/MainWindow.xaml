@@ -11,6 +11,7 @@
 
     <Window.Resources>
 
+        <!-- Colors -->
         <SolidColorBrush x:Key="WindowBackground" Color="#0B1220"/>
         <SolidColorBrush x:Key="SidebarBackground" Color="#111827"/>
         <SolidColorBrush x:Key="PanelBackground" Color="#172033"/>
@@ -21,60 +22,115 @@
         <SolidColorBrush x:Key="TextColor" Color="#F8FAFC"/>
         <SolidColorBrush x:Key="MutedTextColor" Color="#94A3B8"/>
         <SolidColorBrush x:Key="SuccessColor" Color="#22C55E"/>
+        <SolidColorBrush x:Key="WarningColor" Color="#F59E0B"/>
 
+        <!-- Text -->
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Foreground"
+                    Value="{StaticResource TextColor}"/>
+            <Setter Property="FontFamily"
+                    Value="Segoe UI"/>
         </Style>
 
+        <!-- Text boxes -->
         <Style TargetType="TextBox">
-            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
-            <Setter Property="Background" Value="{StaticResource InputBackground}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="Foreground"
+                    Value="{StaticResource TextColor}"/>
+            <Setter Property="Background"
+                    Value="{StaticResource InputBackground}"/>
+            <Setter Property="BorderBrush"
+                    Value="{StaticResource BorderColor}"/>
+            <Setter Property="BorderThickness"
+                    Value="1"/>
+            <Setter Property="Padding"
+                    Value="10,8"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="CaretBrush"
+                    Value="White"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
         </Style>
 
+        <!-- Password boxes -->
         <Style TargetType="PasswordBox">
-            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
-            <Setter Property="Background" Value="{StaticResource InputBackground}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="Foreground"
+                    Value="{StaticResource TextColor}"/>
+            <Setter Property="Background"
+                    Value="{StaticResource InputBackground}"/>
+            <Setter Property="BorderBrush"
+                    Value="{StaticResource BorderColor}"/>
+            <Setter Property="BorderThickness"
+                    Value="1"/>
+            <Setter Property="Padding"
+                    Value="10,8"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="CaretBrush"
+                    Value="White"/>
         </Style>
 
+        <!-- Checkboxes -->
         <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource TextColor}"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground"
+                    Value="{StaticResource TextColor}"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
         </Style>
 
+        <!-- Combo boxes -->
         <Style TargetType="ComboBox">
-            <Setter Property="Foreground" Value="#111827"/>
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
-            <Setter Property="Padding" Value="8"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground"
+                    Value="#111827"/>
+            <Setter Property="Background"
+                    Value="White"/>
+            <Setter Property="BorderBrush"
+                    Value="{StaticResource BorderColor}"/>
+            <Setter Property="Padding"
+                    Value="8"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
         </Style>
 
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground"
+                    Value="#111827"/>
+            <Setter Property="Background"
+                    Value="White"/>
+            <Setter Property="Padding"
+                    Value="8"/>
+        </Style>
+
+        <!-- Main buttons -->
         <Style x:Key="PrimaryButtonStyle"
                TargetType="Button">
 
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,10"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground"
+                    Value="White"/>
+
+            <Setter Property="Background"
+                    Value="{StaticResource PrimaryColor}"/>
+
+            <Setter Property="BorderThickness"
+                    Value="0"/>
+
+            <Setter Property="Padding"
+                    Value="16,10"/>
+
+            <Setter Property="FontSize"
+                    Value="14"/>
+
+            <Setter Property="FontWeight"
+                    Value="SemiBold"/>
+
+            <Setter Property="Cursor"
+                    Value="Hand"/>
 
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Border"
+
+                        <Border x:Name="ButtonBorder"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="7">
 
@@ -83,17 +139,23 @@
                         </Border>
 
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border"
+
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+
+                                <Setter TargetName="ButtonBorder"
                                         Property="Background"
                                         Value="{StaticResource PrimaryHoverColor}"/>
                             </Trigger>
 
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border"
+                            <Trigger Property="IsEnabled"
+                                     Value="False">
+
+                                <Setter TargetName="ButtonBorder"
                                         Property="Opacity"
                                         Value="0.45"/>
                             </Trigger>
+
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -108,6 +170,7 @@
                     Value="{StaticResource InputBackground}"/>
         </Style>
 
+        <!-- Sidebar buttons -->
         <Style x:Key="NavigationButtonStyle"
                TargetType="Button">
 
@@ -138,7 +201,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Border"
+
+                        <Border x:Name="NavigationBorder"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="7">
 
@@ -148,22 +212,25 @@
                         </Border>
 
                         <ControlTemplate.Triggers>
+
                             <Trigger Property="IsMouseOver"
                                      Value="True">
 
-                                <Setter TargetName="Border"
+                                <Setter TargetName="NavigationBorder"
                                         Property="Background"
                                         Value="#1E293B"/>
 
                                 <Setter Property="Foreground"
                                         Value="White"/>
                             </Trigger>
+
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
+        <!-- Cards -->
         <Style x:Key="CardStyle"
                TargetType="Border">
 
@@ -192,7 +259,7 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Sidebar -->
+        <!-- SIDEBAR -->
         <Border Grid.Column="0"
                 Background="{StaticResource SidebarBackground}"
                 BorderBrush="#1E293B"
@@ -200,6 +267,7 @@
 
             <DockPanel>
 
+                <!-- Version card -->
                 <Border DockPanel.Dock="Bottom"
                         Background="#0F172A"
                         BorderBrush="{StaticResource BorderColor}"
@@ -209,6 +277,7 @@
                         Margin="15">
 
                     <StackPanel>
+
                         <TextBlock Text="PalWorld Server Manager"
                                    FontSize="12"
                                    FontWeight="SemiBold"/>
@@ -217,9 +286,11 @@
                                    Foreground="{StaticResource MutedTextColor}"
                                    FontSize="11"
                                    Margin="0,4,0,0"/>
+
                     </StackPanel>
                 </Border>
 
+                <!-- Branding -->
                 <StackPanel DockPanel.Dock="Top"
                             Margin="20,25,20,20">
 
@@ -237,41 +308,43 @@
                                Foreground="{StaticResource MutedTextColor}"
                                FontSize="12"
                                Margin="0,4,0,0"/>
+
                 </StackPanel>
 
+                <!-- Navigation -->
                 <StackPanel>
 
-                    <Button Content="Dashboard"
+                    <Button Content="⌂   Dashboard"
                             Tag="0"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
 
-                    <Button Content="Settings"
+                    <Button Content="⚙   Settings"
                             Tag="1"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
 
-                    <Button Content="Players"
+                    <Button Content="♟   Players"
                             Tag="2"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
 
-                    <Button Content="Console"
+                    <Button Content="▤   Console"
                             Tag="3"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
 
-                    <Button Content="Backups"
+                    <Button Content="▣   Backups"
                             Tag="4"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
 
-                    <Button Content="Scheduler"
+                    <Button Content="◷   Scheduler"
                             Tag="5"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
 
-                    <Button Content="Mods"
+                    <Button Content="◆   Mods"
                             Tag="6"
                             Style="{StaticResource NavigationButtonStyle}"
                             Click="NavigationButton_Click"/>
@@ -281,7 +354,7 @@
             </DockPanel>
         </Border>
 
-        <!-- Main page area -->
+        <!-- MAIN AREA -->
         <Grid Grid.Column="1"
               Background="{StaticResource WindowBackground}">
 
@@ -290,19 +363,21 @@
                         Background="Transparent"
                         BorderThickness="0">
 
-                <!-- Hide normal tab headers -->
+                <!-- Hide standard page tabs -->
                 <TabControl.Template>
                     <ControlTemplate TargetType="TabControl">
                         <ContentPresenter ContentSource="SelectedContent"/>
                     </ControlTemplate>
                 </TabControl.Template>
 
-                <!-- Dashboard -->
+                <!-- DASHBOARD -->
                 <TabItem>
+
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                         <StackPanel Margin="30">
 
+                            <!-- Dashboard header -->
                             <Grid Margin="0,0,0,22">
 
                                 <Grid.ColumnDefinitions>
@@ -311,42 +386,143 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel>
+
                                     <TextBlock Text="Dashboard"
                                                FontSize="29"
                                                FontWeight="SemiBold"/>
 
-                                    <TextBlock Text="Overview of the currently loaded server configuration."
+                                    <TextBlock Text="Overview of the currently loaded Palworld server configuration."
                                                Foreground="{StaticResource MutedTextColor}"
                                                Margin="0,6,0,0"/>
+
                                 </StackPanel>
 
-                                <Button Grid.Column="1"
-                                        Content="Open Settings"
-                                        Width="140"
-                                        Height="42"
-                                        Tag="1"
-                                        Style="{StaticResource PrimaryButtonStyle}"
-                                        Click="NavigationButton_Click"/>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal">
+
+                                    <Button Content="Load Settings"
+                                            Width="135"
+                                            Height="42"
+                                            Margin="0,0,10,0"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Click="LoadButton_Click"/>
+
+                                    <Button Content="Open Settings"
+                                            Width="135"
+                                            Height="42"
+                                            Tag="1"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Click="NavigationButton_Click"/>
+
+                                </StackPanel>
                             </Grid>
 
+                            <!-- File status -->
                             <Border Style="{StaticResource CardStyle}"
                                     Margin="0,0,0,18">
 
-                                <StackPanel>
-                                    <TextBlock Text="Welcome to PalWorld Server Manager"
-                                               FontSize="20"
-                                               FontWeight="SemiBold"/>
+                                <Grid>
 
-                                    <TextBlock Text="Your working settings editor is available from the Settings page. Dashboard information and server controls will be connected in the next step."
-                                               Foreground="{StaticResource MutedTextColor}"
-                                               TextWrapping="Wrap"
-                                               Margin="0,9,0,0"/>
-                                </StackPanel>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="DashboardStatusDot"
+                                             Width="14"
+                                             Height="14"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,14,0"/>
+
+                                    <StackPanel Grid.Column="1">
+
+                                        <TextBlock x:Name="DashboardStatusTitle"
+                                                   Text="No settings file loaded"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="DashboardStatusDescription"
+                                                   Text="Click Load Settings and select PalWorldSettings.ini."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
                             </Border>
 
-                            <Grid>
+                            <!-- Metrics row 1 -->
+                            <Grid Margin="0,0,0,12">
 
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource CardStyle}"
+                                        Margin="0,0,12,0">
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Server Name"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+
+                                        <TextBlock x:Name="DashboardServerNameText"
+                                                   Text="Not loaded"
+                                                   FontSize="22"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,10,0,0"/>
+
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="1"
+                                        Style="{StaticResource CardStyle}"
+                                        Margin="0,0,12,0">
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Maximum Players"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+
+                                        <TextBlock x:Name="DashboardPlayerLimitText"
+                                                   Text="—"
+                                                   FontSize="25"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,10,0,0"/>
+
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="2"
+                                        Style="{StaticResource CardStyle}">
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="XP Rate"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+
+                                        <TextBlock x:Name="DashboardExpRateText"
+                                                   Text="—"
+                                                   FontSize="25"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,10,0,0"/>
+
+                                    </StackPanel>
+                                </Border>
+
+                            </Grid>
+
+                            <!-- Metrics row 2 -->
+                            <Grid Margin="0,0,0,18">
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
@@ -357,14 +533,16 @@
                                         Margin="0,0,12,0">
 
                                     <StackPanel>
-                                        <TextBlock Text="Settings Editor"
+
+                                        <TextBlock Text="Game Mode"
                                                    Foreground="{StaticResource MutedTextColor}"/>
 
-                                        <TextBlock Text="Ready"
-                                                   Foreground="{StaticResource SuccessColor}"
-                                                   FontSize="23"
+                                        <TextBlock x:Name="DashboardGameModeText"
+                                                   Text="—"
+                                                   FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
+
                                     </StackPanel>
                                 </Border>
 
@@ -373,39 +551,97 @@
                                         Margin="0,0,12,0">
 
                                     <StackPanel>
-                                        <TextBlock Text="Automatic Backups"
+
+                                        <TextBlock Text="PvP"
                                                    Foreground="{StaticResource MutedTextColor}"/>
 
-                                        <TextBlock Text="Enabled"
-                                                   Foreground="{StaticResource SuccessColor}"
-                                                   FontSize="23"
+                                        <TextBlock x:Name="DashboardPvpText"
+                                                   Text="—"
+                                                   FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
+
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Column="2"
+                                        Style="{StaticResource CardStyle}"
+                                        Margin="0,0,12,0">
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Hardcore"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+
+                                        <TextBlock x:Name="DashboardHardcoreText"
+                                                   Text="—"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,10,0,0"/>
+
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="3"
                                         Style="{StaticResource CardStyle}">
 
                                     <StackPanel>
-                                        <TextBlock Text="Current Branch"
+
+                                        <TextBlock Text="Public Port"
                                                    Foreground="{StaticResource MutedTextColor}"/>
 
-                                        <TextBlock Text="ui-redesign"
-                                                   FontSize="21"
+                                        <TextBlock x:Name="DashboardPortText"
+                                                   Text="—"
+                                                   FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
+
                                     </StackPanel>
                                 </Border>
 
                             </Grid>
+
+                            <!-- Quick actions -->
+                            <Border Style="{StaticResource CardStyle}">
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Quick Actions"
+                                               FontSize="19"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Text="Load a configuration file or open the full settings editor."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               Margin="0,6,0,18"/>
+
+                                    <WrapPanel>
+
+                                        <Button Content="Load Settings File"
+                                                Width="160"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Click="LoadButton_Click"/>
+
+                                        <Button Content="Open Settings Editor"
+                                                Width="170"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                Tag="1"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="NavigationButton_Click"/>
+
+                                    </WrapPanel>
+
+                                </StackPanel>
+                            </Border>
 
                         </StackPanel>
 
                     </ScrollViewer>
                 </TabItem>
 
-                <!-- Settings -->
+                <!-- SETTINGS -->
                 <TabItem>
 
                     <Grid Margin="28">
@@ -416,6 +652,7 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Settings header -->
                         <Grid Grid.Row="0"
                               Margin="0,0,0,18">
 
@@ -425,6 +662,7 @@
                             </Grid.ColumnDefinitions>
 
                             <StackPanel>
+
                                 <TextBlock Text="Server Settings"
                                            FontSize="29"
                                            FontWeight="SemiBold"/>
@@ -432,6 +670,7 @@
                                 <TextBlock Text="Load, edit, validate, and save PalWorldSettings.ini."
                                            Foreground="{StaticResource MutedTextColor}"
                                            Margin="0,6,0,0"/>
+
                             </StackPanel>
 
                             <StackPanel Grid.Column="1"
@@ -451,14 +690,18 @@
                                         IsEnabled="False"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Click="SaveButton_Click"/>
+
                             </StackPanel>
                         </Grid>
 
+                        <!-- Settings tabs -->
                         <TabControl Grid.Row="1"
                                     Background="Transparent"
                                     BorderBrush="{StaticResource BorderColor}">
 
+                            <!-- Server tab -->
                             <TabItem Header="Server">
+
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                                     <Border Style="{StaticResource CardStyle}"
@@ -472,31 +715,39 @@
                                                        Margin="0,0,0,20"/>
 
                                             <TextBlock Text="Server Name"/>
+
                                             <TextBox x:Name="ServerNameTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Server Description"/>
+
                                             <TextBox x:Name="DescriptionTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Maximum Players"/>
+
                                             <TextBox x:Name="MaxPlayersTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Admin Password"/>
+
                                             <PasswordBox x:Name="AdminPasswordBox"
                                                          Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Server Password"/>
+
                                             <PasswordBox x:Name="ServerPasswordBox"
                                                          Margin="0,6,0,0"/>
 
                                         </StackPanel>
                                     </Border>
+
                                 </ScrollViewer>
                             </TabItem>
 
+                            <!-- Gameplay tab -->
                             <TabItem Header="Gameplay">
+
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                                     <Border Style="{StaticResource CardStyle}"
@@ -510,35 +761,44 @@
                                                        Margin="0,0,0,20"/>
 
                                             <TextBlock Text="XP Rate"/>
+
                                             <TextBox x:Name="ExpRateTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Pal Capture Rate"/>
+
                                             <TextBox x:Name="PalCaptureRateTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Pal Spawn Rate"/>
+
                                             <TextBox x:Name="PalSpawnRateTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Daytime Speed Rate"/>
+
                                             <TextBox x:Name="DayTimeSpeedTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Nighttime Speed Rate"/>
+
                                             <TextBox x:Name="NightTimeSpeedTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Work Speed Rate"/>
+
                                             <TextBox x:Name="WorkSpeedTextBox"
                                                      Margin="0,6,0,0"/>
 
                                         </StackPanel>
                                     </Border>
+
                                 </ScrollViewer>
                             </TabItem>
 
+                            <!-- PvP tab -->
                             <TabItem Header="PvP &amp; Hardcore">
+
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                                     <Border Style="{StaticResource CardStyle}"
@@ -582,10 +842,13 @@
 
                                         </StackPanel>
                                     </Border>
+
                                 </ScrollViewer>
                             </TabItem>
 
+                            <!-- Bases tab -->
                             <TabItem Header="Bases &amp; Guilds">
+
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                                     <Border Style="{StaticResource CardStyle}"
@@ -599,27 +862,34 @@
                                                        Margin="0,0,0,20"/>
 
                                             <TextBlock Text="Workers Per Base"/>
+
                                             <TextBox x:Name="BaseWorkersTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Maximum Guild Players"/>
+
                                             <TextBox x:Name="GuildPlayersTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Bases Per Guild"/>
+
                                             <TextBox x:Name="BasesPerGuildTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Maximum Total Base Camps"/>
+
                                             <TextBox x:Name="BaseCampMaxTextBox"
                                                      Margin="0,6,0,0"/>
 
                                         </StackPanel>
                                     </Border>
+
                                 </ScrollViewer>
                             </TabItem>
 
+                            <!-- Network tab -->
                             <TabItem Header="Network">
+
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                                     <Border Style="{StaticResource CardStyle}"
@@ -633,10 +903,12 @@
                                                        Margin="0,0,0,20"/>
 
                                             <TextBlock Text="Public IP Address"/>
+
                                             <TextBox x:Name="PublicIpTextBox"
                                                      Margin="0,6,0,16"/>
 
                                             <TextBlock Text="Public Port"/>
+
                                             <TextBox x:Name="PublicPortTextBox"
                                                      Margin="0,6,0,16"/>
 
@@ -645,6 +917,7 @@
                                                       Margin="0,5,0,16"/>
 
                                             <TextBlock Text="RCON Port"/>
+
                                             <TextBox x:Name="RconPortTextBox"
                                                      Margin="0,6,0,16"/>
 
@@ -653,15 +926,19 @@
                                                       Margin="0,5,0,16"/>
 
                                             <TextBlock Text="REST API Port"/>
+
                                             <TextBox x:Name="RestApiPortTextBox"
                                                      Margin="0,6,0,0"/>
 
                                         </StackPanel>
                                     </Border>
+
                                 </ScrollViewer>
                             </TabItem>
 
+                            <!-- Advanced tab -->
                             <TabItem Header="Advanced">
+
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
 
                                     <Border Style="{StaticResource CardStyle}"
@@ -691,16 +968,19 @@
                                                       Margin="0,5,0,18"/>
 
                                             <TextBlock Text="Maximum Chat Posts Per Minute"/>
+
                                             <TextBox x:Name="ChatPostLimitTextBox"
                                                      Margin="0,6,0,0"/>
 
                                         </StackPanel>
                                     </Border>
+
                                 </ScrollViewer>
                             </TabItem>
 
                         </TabControl>
 
+                        <!-- Status bar -->
                         <Border Grid.Row="2"
                                 Background="{StaticResource PanelBackground}"
                                 BorderBrush="{StaticResource BorderColor}"
@@ -713,58 +993,134 @@
                                        Text="No settings file loaded."
                                        Foreground="{StaticResource MutedTextColor}"
                                        TextWrapping="Wrap"/>
+
                         </Border>
 
                     </Grid>
                 </TabItem>
 
+                <!-- PLAYERS -->
                 <TabItem>
-                    <Grid>
-                        <TextBlock Text="Players will be added in a future phase."
-                                   Foreground="{StaticResource MutedTextColor}"
-                                   FontSize="20"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+
+                    <Grid Margin="28">
+
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="520">
+
+                            <TextBlock Text="Players"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Live player information will require the Palworld REST API or RCON connection."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+
+                        </StackPanel>
+
                     </Grid>
                 </TabItem>
 
+                <!-- CONSOLE -->
                 <TabItem>
-                    <Grid>
-                        <TextBlock Text="The live server console will be added later."
-                                   Foreground="{StaticResource MutedTextColor}"
-                                   FontSize="20"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+
+                    <Grid Margin="28">
+
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="520">
+
+                            <TextBlock Text="Console"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="A live console and server logs will be added after server process controls are implemented."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+
+                        </StackPanel>
+
                     </Grid>
                 </TabItem>
 
+                <!-- BACKUPS -->
                 <TabItem>
-                    <Grid>
-                        <TextBlock Text="Backup management will be added here."
-                                   Foreground="{StaticResource MutedTextColor}"
-                                   FontSize="20"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+
+                    <Grid Margin="28">
+
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="520">
+
+                            <TextBlock Text="Backups"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Your app already creates timestamped INI backups. A backup browser and restore button will be added here."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+
+                        </StackPanel>
+
                     </Grid>
                 </TabItem>
 
+                <!-- SCHEDULER -->
                 <TabItem>
-                    <Grid>
-                        <TextBlock Text="Scheduled restarts and backups will be added here."
-                                   Foreground="{StaticResource MutedTextColor}"
-                                   FontSize="20"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+
+                    <Grid Margin="28">
+
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="520">
+
+                            <TextBlock Text="Scheduler"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Scheduled restarts, saves, and backups will be added in a later phase."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+
+                        </StackPanel>
+
                     </Grid>
                 </TabItem>
 
+                <!-- MODS -->
                 <TabItem>
-                    <Grid>
-                        <TextBlock Text="Mod management is planned for a future release."
-                                   Foreground="{StaticResource MutedTextColor}"
-                                   FontSize="20"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
+
+                    <Grid Margin="28">
+
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="520">
+
+                            <TextBlock Text="Mods"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+
+                            <TextBlock Text="Mod management is planned for a future release."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="0,12,0,0"/>
+
+                        </StackPanel>
+
                     </Grid>
                 </TabItem>
 
