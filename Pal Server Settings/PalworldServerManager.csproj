@@ -10,4 +10,10 @@
     <AssemblyName>PalWorldServerManager</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\PalworldBackground.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Resource>
+  </ItemGroup>
+
 </Project>

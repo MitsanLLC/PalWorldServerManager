@@ -13,9 +13,9 @@
 
         <!-- Colors -->
         <SolidColorBrush x:Key="WindowBackground" Color="#0B1220"/>
-        <SolidColorBrush x:Key="SidebarBackground" Color="#111827"/>
-        <SolidColorBrush x:Key="PanelBackground" Color="#172033"/>
-        <SolidColorBrush x:Key="InputBackground" Color="#1E293B"/>
+        <SolidColorBrush x:Key="SidebarBackground" Color="#E6111827"/>
+        <SolidColorBrush x:Key="PanelBackground" Color="#D9172033"/>
+        <SolidColorBrush x:Key="InputBackground" Color="#E61E293B"/>
         <SolidColorBrush x:Key="BorderColor" Color="#334155"/>
         <SolidColorBrush x:Key="PrimaryColor" Color="#2563EB"/>
         <SolidColorBrush x:Key="PrimaryHoverColor" Color="#3B82F6"/>
@@ -357,6 +357,17 @@
         <!-- MAIN AREA -->
         <Grid Grid.Column="1"
               Background="{StaticResource WindowBackground}">
+
+            <!-- Scenic application background -->
+            <Image Source="Assets/PalworldBackground.png"
+                   Stretch="UniformToFill"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch"
+                   IsHitTestVisible="False"/>
+
+            <!-- Dark overlay keeps text and controls readable -->
+            <Border Background="#A80B1220"
+                    IsHitTestVisible="False"/>
 
             <TabControl x:Name="MainNavigationTabControl"
                         SelectedIndex="0"
