@@ -1019,6 +1019,14 @@
 
                                     <CheckBox x:Name="AttachToRunningServerCheckBox"
                                               Content="Attach to an already-running Palworld server when the app starts"
+                                              Margin="0,0,0,10"/>
+
+                                    <CheckBox x:Name="CheckForServerUpdatesCheckBox"
+                                              Content="Check for server updates before startup"
+                                              Margin="0,0,0,10"/>
+
+                                    <CheckBox x:Name="StartWithWindowsCheckBox"
+                                              Content="Start Palworld Server Manager when Windows starts"
                                               Margin="0,0,0,18"/>
 
 
@@ -1485,7 +1493,39 @@
                                             <TextBlock Text="Maximum Chat Posts Per Minute"/>
 
                                             <TextBox x:Name="ChatPostLimitTextBox"
-                                                     Margin="0,6,0,0"/>
+                                                     Margin="0,6,0,18"/>
+
+                                            <Separator Margin="0,4,0,18"/>
+
+                                            <TextBlock Text="SteamCMD"
+                                                       FontSize="17"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,0,0,6"/>
+
+                                            <TextBlock Text="Used when 'Check for server updates before startup' is enabled on the Dashboard."
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,0,0,12"/>
+
+                                            <TextBlock Text="SteamCMD executable"/>
+
+                                            <Grid Margin="0,6,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBox x:Name="SteamCmdPathTextBox"
+                                                         IsReadOnly="True"
+                                                         Margin="0,0,10,0"/>
+
+                                                <Button x:Name="BrowseSteamCmdButton"
+                                                        Grid.Column="1"
+                                                        Content="Browse..."
+                                                        Width="110"
+                                                        Height="38"
+                                                        Style="{StaticResource SecondaryButtonStyle}"/>
+                                            </Grid>
 
                                         </StackPanel>
                                     </Border>

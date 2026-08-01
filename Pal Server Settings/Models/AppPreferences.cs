@@ -9,6 +9,12 @@
 
         public bool AttachToRunningServerOnStartup { get; set; } = true;
 
+        public bool CheckForServerUpdatesBeforeStartup { get; set; }
+
+        public bool StartWithWindows { get; set; }
+
+        public string SteamCmdPath { get; set; } = "";
+
         // Last active Palworld configuration file
         public string LastSettingsFilePath { get; set; } = "";
 

@@ -2,16 +2,17 @@
 using PalWorldServerManager.Models;
 using PalWorldServerManager.Services;
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Media;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace PalWorldServerManager
@@ -22,6 +23,8 @@ namespace PalWorldServerManager
         private readonly BackupService _backupService = new();
         private readonly WorldBackupService _worldBackupService = new();
         private readonly ServerModService _serverModService = new();
+        private readonly SteamCmdService _steamCmdService = new();
+        private readonly WindowsStartupService _windowsStartupService = new();
         private readonly ServerProcessService _serverProcessService = new();
         private readonly AppPreferencesService _preferencesService = new();
         private readonly PalworldRestApiService _restApiService = new();
@@ -79,6 +82,12 @@ namespace PalWorldServerManager
             WireModEvents();
             WireMetricsEvents();
             DismissStartupDiagnosticsButton.Click += DismissStartupDiagnosticsButton_Click;
+            BrowseSteamCmdButton.Click += BrowseSteamCmdButton_Click;
+            StartWithWindowsCheckBox.Checked += StartWithWindowsCheckBox_Changed;
+            StartWithWindowsCheckBox.Unchecked += StartWithWindowsCheckBox_Changed;
+
+            _steamCmdService.OutputReceived += SteamCmdService_OutputReceived;
+            _steamCmdService.ErrorReceived += SteamCmdService_ErrorReceived;
 
             _serverProcessService.OutputReceived += ServerProcessService_OutputReceived;
             _serverProcessService.ErrorReceived += ServerProcessService_ErrorReceived;
@@ -766,9 +775,7 @@ namespace PalWorldServerManager
                 AddActivity(
                     $"Crash recovery attempt {_crashRecoveryAttemptCount} of {maxAttempts} starting.");
 
-                _serverProcessService.StartServer(
-                    _preferences.ServerExecutablePath,
-                    _preferences.LaunchArguments);
+                await StartPalServerWithOptionalUpdateAsync();
 
                 await Task.Delay(
                     2000);
@@ -2954,9 +2961,7 @@ namespace PalWorldServerManager
 
                 await Task.Delay(1500);
 
-                _serverProcessService.StartServer(
-                    _preferences.ServerExecutablePath,
-                    _preferences.LaunchArguments);
+                await StartPalServerWithOptionalUpdateAsync();
 
                 AddActivity(
                     "Scheduled restart completed successfully.");
@@ -3376,7 +3381,10 @@ namespace PalWorldServerManager
             _autoSaveTimer.Stop();
             _serverProcessService.OutputReceived -= ServerProcessService_OutputReceived;
             _serverProcessService.ErrorReceived -= ServerProcessService_ErrorReceived;
+            _steamCmdService.OutputReceived -= SteamCmdService_OutputReceived;
+            _steamCmdService.ErrorReceived -= SteamCmdService_ErrorReceived;
             _serverProcessService.Dispose();
+            _steamCmdService.Dispose();
             _restApiService.Dispose();
         }
 
@@ -3636,6 +3644,122 @@ namespace PalWorldServerManager
             ServerExecutablePathTextBox.Text = _preferences.ServerExecutablePath;
             ServerLaunchArgumentsTextBox.Text = _preferences.LaunchArguments;
             AttachToRunningServerCheckBox.IsChecked = _preferences.AttachToRunningServerOnStartup;
+            CheckForServerUpdatesCheckBox.IsChecked = _preferences.CheckForServerUpdatesBeforeStartup;
+            StartWithWindowsCheckBox.IsChecked = _preferences.StartWithWindows;
+            SteamCmdPathTextBox.Text = _preferences.SteamCmdPath;
+        }
+
+        private void BrowseSteamCmdButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog dialog = new OpenFileDialog
+            {
+                Title = "Select steamcmd.exe",
+                Filter = "SteamCMD (steamcmd.exe)|steamcmd.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            SteamCmdPathTextBox.Text = dialog.FileName;
+            _preferences.SteamCmdPath = dialog.FileName;
+            _preferencesService.Save(_preferences);
+            AddActivity($"SteamCMD selected: {dialog.FileName}");
+        }
+
+        private void StartWithWindowsCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!IsLoaded)
+            {
+                return;
+            }
+
+            bool enabled = StartWithWindowsCheckBox.IsChecked == true;
+
+            try
+            {
+                _windowsStartupService.SetStartWithWindows(enabled);
+                _preferences.StartWithWindows = enabled;
+                _preferencesService.Save(_preferences);
+
+                AddActivity(enabled
+                    ? "Windows startup enabled for Palworld Server Manager."
+                    : "Windows startup disabled for Palworld Server Manager.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not change the Windows startup setting.\n\n" + ex.Message,
+                    "Windows Startup Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void SteamCmdService_OutputReceived(object? sender, string message)
+        {
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                Dispatcher.Invoke(() => AddActivity($"STEAMCMD: {message}"));
+            }
+        }
+
+        private void SteamCmdService_ErrorReceived(object? sender, string message)
+        {
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                Dispatcher.Invoke(() => AddActivity($"STEAMCMD ERROR: {message}"));
+            }
+        }
+
+        private async Task StartPalServerWithOptionalUpdateAsync()
+        {
+            SavePreferencesFromControls();
+
+            if (_preferences.CheckForServerUpdatesBeforeStartup)
+            {
+                if (string.IsNullOrWhiteSpace(_preferences.SteamCmdPath))
+                {
+                    throw new InvalidOperationException(
+                        "Update checking is enabled, but SteamCMD has not been selected.\n\nGo to Settings → Advanced and choose steamcmd.exe.");
+                }
+
+                if (!System.IO.File.Exists(_preferences.SteamCmdPath))
+                {
+                    throw new FileNotFoundException("steamcmd.exe could not be found.", _preferences.SteamCmdPath);
+                }
+
+                string? serverInstallDirectory =
+                    System.IO.Path.GetDirectoryName(_preferences.ServerExecutablePath);
+
+                if (string.IsNullOrWhiteSpace(serverInstallDirectory))
+                {
+                    throw new InvalidOperationException("Could not determine the PalServer installation directory.");
+                }
+
+                ServerProcessStatusTitle.Text = "Checking for server updates...";
+                ServerProcessStatusDescription.Text =
+                    "SteamCMD is validating and updating Palworld Dedicated Server.";
+                SetServerControlButtonsEnabled(false);
+
+                AddActivity("Checking Palworld Dedicated Server for updates with SteamCMD.");
+
+                await _steamCmdService.UpdatePalworldServerAsync(
+                    _preferences.SteamCmdPath,
+                    serverInstallDirectory);
+
+                AddActivity("SteamCMD update check completed successfully.");
+            }
+
+            ClearStartupDiagnostic();
+            _serverStartAttemptTime = DateTime.Now;
+            _serverStartValidationPending = true;
+
+            _serverProcessService.StartServer(
+                _preferences.ServerExecutablePath,
+                _preferences.LaunchArguments);
         }
 
         private void BrowseServerExecutableButton_Click(object sender, RoutedEventArgs e)
@@ -3668,6 +3792,15 @@ namespace PalWorldServerManager
 
             _preferences.AttachToRunningServerOnStartup =
                 AttachToRunningServerCheckBox.IsChecked == true;
+
+            _preferences.CheckForServerUpdatesBeforeStartup =
+                CheckForServerUpdatesCheckBox.IsChecked == true;
+
+            _preferences.StartWithWindows =
+                StartWithWindowsCheckBox.IsChecked == true;
+
+            _preferences.SteamCmdPath =
+                SteamCmdPathTextBox.Text.Trim();
 
             _preferencesService.Save(_preferences);
 
@@ -3731,20 +3864,12 @@ namespace PalWorldServerManager
             }
         }
 
-        private void StartServerButton_Click(object sender, RoutedEventArgs e)
+        private async void StartServerButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                SavePreferencesFromControls();
                 CancelCrashRecovery();
-                ClearStartupDiagnostic();
-
-                _serverStartAttemptTime = DateTime.Now;
-                _serverStartValidationPending = true;
-
-                _serverProcessService.StartServer(
-                    _preferences.ServerExecutablePath,
-                    _preferences.LaunchArguments);
+                await StartPalServerWithOptionalUpdateAsync();
 
                 AddActivity("Palworld server started.");
                 UpdateServerProcessDisplay();
@@ -3753,7 +3878,13 @@ namespace PalWorldServerManager
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not start the server.\n\n{ex.Message}", "Start Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateServerProcessDisplay();
+
+                MessageBox.Show(
+                    $"Could not start the server.\n\n{ex.Message}",
+                    "Start Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -3950,14 +4081,7 @@ namespace PalWorldServerManager
 
                 await Task.Delay(1500);
 
-                ClearStartupDiagnostic();
-
-                _serverStartAttemptTime = DateTime.Now;
-                _serverStartValidationPending = true;
-
-                _serverProcessService.StartServer(
-                    _preferences.ServerExecutablePath,
-                    _preferences.LaunchArguments);
+                await StartPalServerWithOptionalUpdateAsync();
 
                 AddActivity("Palworld server restarted successfully.");
 
