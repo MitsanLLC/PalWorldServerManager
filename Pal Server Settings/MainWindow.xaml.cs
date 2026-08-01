@@ -1,8 +1,8 @@
 ﻿using Microsoft.Win32;
+using PalWorldServerManager.Models;
+using PalWorldServerManager.Services;
 using System;
 using System.Globalization;
-using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -11,12 +11,18 @@ namespace PalWorldServerManager
 {
     public partial class MainWindow : Window
     {
+        private readonly PalworldSettingsService _settingsService;
+
         private string? _settingsFilePath;
         private string _fileContents = "";
+        private ServerSettings? _currentSettings;
 
         public MainWindow()
         {
             InitializeComponent();
+
+            _settingsService =
+                new PalworldSettingsService();
         }
 
         private void NavigationButton_Click(
@@ -35,18 +41,24 @@ namespace PalWorldServerManager
                 return;
             }
 
-            MainNavigationTabControl.SelectedIndex = selectedPage;
+            MainNavigationTabControl.SelectedIndex =
+                selectedPage;
         }
 
         private void LoadButton_Click(
             object sender,
             RoutedEventArgs e)
         {
-            OpenFileDialog dialog = new OpenFileDialog
-            {
-                Title = "Select PalWorldSettings.ini",
-                Filter = "INI files (*.ini)|*.ini|All files (*.*)|*.*"
-            };
+            OpenFileDialog dialog =
+                new OpenFileDialog
+                {
+                    Title =
+                        "Select PalWorldSettings.ini",
+
+                    Filter =
+                        "INI files (*.ini)|*.ini|" +
+                        "All files (*.*)|*.*"
+                };
 
             if (dialog.ShowDialog() != true)
             {
@@ -55,28 +67,8 @@ namespace PalWorldServerManager
 
             try
             {
-                _settingsFilePath = dialog.FileName;
-                _fileContents = File.ReadAllText(_settingsFilePath);
-
-                if (!_fileContents.Contains("OptionSettings=("))
-                {
-                    throw new InvalidDataException(
-                        "This file does not contain a Palworld OptionSettings section.");
-                }
-
-                LoadServerSettings();
-                LoadGameplaySettings();
-                LoadPvpSettings();
-                LoadBaseSettings();
-                LoadNetworkSettings();
-                LoadAdvancedSettings();
-
-                SaveButton.IsEnabled = true;
-
-                StatusTextBlock.Text =
-                    $"Loaded: {_settingsFilePath}";
-
-                UpdateDashboard();
+                LoadSettingsFile(
+                    dialog.FileName);
 
                 MessageBox.Show(
                     "Settings loaded successfully.",
@@ -89,178 +81,542 @@ namespace PalWorldServerManager
                 SaveButton.IsEnabled = false;
 
                 MessageBox.Show(
-                    $"Could not load the settings file.\n\n{ex.Message}",
+                    "Could not load the settings file." +
+                    $"\n\n{ex.Message}",
                     "Load Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
         }
 
-        private void LoadServerSettings()
+        private void LoadSettingsFile(
+            string filePath)
         {
+            _settingsFilePath =
+                filePath;
+
+            _fileContents =
+                _settingsService.LoadFileContents(
+                    filePath);
+
+            _currentSettings =
+                _settingsService.ParseSettings(
+                    _fileContents);
+
+            PopulateEditor(
+                _currentSettings);
+
+            UpdateDashboard(
+                _currentSettings);
+
+            SaveButton.IsEnabled = true;
+
+            StatusTextBlock.Text =
+                $"Loaded: {_settingsFilePath}";
+        }
+
+        private void PopulateEditor(
+            ServerSettings settings)
+        {
+            // Server
             ServerNameTextBox.Text =
-                GetSettingValue("ServerName");
+                settings.ServerName;
 
             DescriptionTextBox.Text =
-                GetSettingValue("ServerDescription");
+                settings.ServerDescription;
 
             MaxPlayersTextBox.Text =
-                GetSettingValue("ServerPlayerMaxNum");
+                settings.ServerPlayerMaxNum.ToString(
+                    CultureInfo.InvariantCulture);
 
             AdminPasswordBox.Password =
-                GetSettingValue("AdminPassword");
+                settings.AdminPassword;
 
             ServerPasswordBox.Password =
-                GetSettingValue("ServerPassword");
-        }
+                settings.ServerPassword;
 
-        private void LoadGameplaySettings()
-        {
+            // Gameplay
             ExpRateTextBox.Text =
-                GetSettingValue("ExpRate");
+                FormatEditorDecimal(
+                    settings.ExpRate);
 
             PalCaptureRateTextBox.Text =
-                GetSettingValue("PalCaptureRate");
+                FormatEditorDecimal(
+                    settings.PalCaptureRate);
 
             PalSpawnRateTextBox.Text =
-                GetSettingValue("PalSpawnNumRate");
+                FormatEditorDecimal(
+                    settings.PalSpawnNumRate);
 
             DayTimeSpeedTextBox.Text =
-                GetSettingValue("DayTimeSpeedRate");
+                FormatEditorDecimal(
+                    settings.DayTimeSpeedRate);
 
             NightTimeSpeedTextBox.Text =
-                GetSettingValue("NightTimeSpeedRate");
+                FormatEditorDecimal(
+                    settings.NightTimeSpeedRate);
 
             WorkSpeedTextBox.Text =
-                GetSettingValue("WorkSpeedRate");
-        }
+                FormatEditorDecimal(
+                    settings.WorkSpeedRate);
 
-        private void LoadPvpSettings()
-        {
+            // PvP and hardcore
             PvpCheckBox.IsChecked =
-                GetBooleanSetting("bIsPvP");
+                settings.IsPvP;
 
             HardcoreCheckBox.IsChecked =
-                GetBooleanSetting("bHardcore");
+                settings.IsHardcore;
 
             FriendlyFireCheckBox.IsChecked =
-                GetBooleanSetting("bEnableFriendlyFire");
+                settings.EnableFriendlyFire;
 
             CharacterRecreateCheckBox.IsChecked =
-                GetBooleanSetting("bCharacterRecreateInHardcore");
+                settings.CharacterRecreateInHardcore;
 
             DeathPenaltyComboBox.Text =
-                GetSettingValue("DeathPenalty");
-        }
+                settings.DeathPenalty;
 
-        private void LoadBaseSettings()
-        {
+            // Bases and guilds
             BaseWorkersTextBox.Text =
-                GetSettingValue("BaseCampWorkerMaxNum");
+                settings.BaseCampWorkerMaxNum.ToString(
+                    CultureInfo.InvariantCulture);
 
             GuildPlayersTextBox.Text =
-                GetSettingValue("GuildPlayerMaxNum");
+                settings.GuildPlayerMaxNum.ToString(
+                    CultureInfo.InvariantCulture);
 
             BasesPerGuildTextBox.Text =
-                GetSettingValue("BaseCampMaxNumInGuild");
+                settings.BaseCampMaxNumInGuild.ToString(
+                    CultureInfo.InvariantCulture);
 
             BaseCampMaxTextBox.Text =
-                GetSettingValue("BaseCampMaxNum");
-        }
+                settings.BaseCampMaxNum.ToString(
+                    CultureInfo.InvariantCulture);
 
-        private void LoadNetworkSettings()
-        {
+            // Network
             PublicIpTextBox.Text =
-                GetSettingValue("PublicIP");
+                settings.PublicIP;
 
             PublicPortTextBox.Text =
-                GetSettingValue("PublicPort");
+                settings.PublicPort.ToString(
+                    CultureInfo.InvariantCulture);
 
             RconEnabledCheckBox.IsChecked =
-                GetBooleanSetting("RCONEnabled");
+                settings.RconEnabled;
 
             RconPortTextBox.Text =
-                GetSettingValue("RCONPort");
+                settings.RconPort.ToString(
+                    CultureInfo.InvariantCulture);
 
             RestApiEnabledCheckBox.IsChecked =
-                GetBooleanSetting("RESTAPIEnabled");
+                settings.RestApiEnabled;
 
             RestApiPortTextBox.Text =
-                GetSettingValue("RESTAPIPort");
-        }
+                settings.RestApiPort.ToString(
+                    CultureInfo.InvariantCulture);
 
-        private void LoadAdvancedSettings()
-        {
+            // Advanced
             UseAuthCheckBox.IsChecked =
-                GetBooleanSetting("bUseAuth");
+                settings.UseAuth;
 
             AllowClientModCheckBox.IsChecked =
-                GetBooleanSetting("bAllowClientMod");
+                settings.AllowClientMod;
 
             BackupSaveDataCheckBox.IsChecked =
-                GetBooleanSetting("bIsUseBackupSaveData");
+                settings.IsUseBackupSaveData;
 
             ShowPlayerListCheckBox.IsChecked =
-                GetBooleanSetting("bShowPlayerList");
+                settings.ShowPlayerList;
 
             ChatPostLimitTextBox.Text =
-                GetSettingValue("ChatPostLimitPerMinute");
+                settings.ChatPostLimitPerMinute.ToString(
+                    CultureInfo.InvariantCulture);
         }
 
-        private void UpdateDashboard()
+        private bool TryCreateSettingsFromEditor(
+            out ServerSettings settings)
+        {
+            settings =
+                new ServerSettings();
+
+            if (!TryReadInteger(
+                    MaxPlayersTextBox.Text,
+                    "Maximum Players",
+                    1,
+                    1000,
+                    out int maximumPlayers))
+            {
+                return false;
+            }
+
+            if (!TryReadDecimal(
+                    ExpRateTextBox.Text,
+                    "XP Rate",
+                    0,
+                    1000,
+                    out double expRate))
+            {
+                return false;
+            }
+
+            if (!TryReadDecimal(
+                    PalCaptureRateTextBox.Text,
+                    "Pal Capture Rate",
+                    0,
+                    1000,
+                    out double captureRate))
+            {
+                return false;
+            }
+
+            if (!TryReadDecimal(
+                    PalSpawnRateTextBox.Text,
+                    "Pal Spawn Rate",
+                    0,
+                    1000,
+                    out double spawnRate))
+            {
+                return false;
+            }
+
+            if (!TryReadDecimal(
+                    DayTimeSpeedTextBox.Text,
+                    "Daytime Speed Rate",
+                    0,
+                    1000,
+                    out double daytimeSpeed))
+            {
+                return false;
+            }
+
+            if (!TryReadDecimal(
+                    NightTimeSpeedTextBox.Text,
+                    "Nighttime Speed Rate",
+                    0,
+                    1000,
+                    out double nighttimeSpeed))
+            {
+                return false;
+            }
+
+            if (!TryReadDecimal(
+                    WorkSpeedTextBox.Text,
+                    "Work Speed Rate",
+                    0,
+                    1000,
+                    out double workSpeed))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    BaseWorkersTextBox.Text,
+                    "Workers Per Base",
+                    1,
+                    1000,
+                    out int workersPerBase))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    GuildPlayersTextBox.Text,
+                    "Maximum Guild Players",
+                    1,
+                    1000,
+                    out int guildPlayers))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    BasesPerGuildTextBox.Text,
+                    "Bases Per Guild",
+                    1,
+                    1000,
+                    out int basesPerGuild))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    BaseCampMaxTextBox.Text,
+                    "Maximum Total Base Camps",
+                    1,
+                    10000,
+                    out int maximumBaseCamps))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    PublicPortTextBox.Text,
+                    "Public Port",
+                    1,
+                    65535,
+                    out int publicPort))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    RconPortTextBox.Text,
+                    "RCON Port",
+                    1,
+                    65535,
+                    out int rconPort))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    RestApiPortTextBox.Text,
+                    "REST API Port",
+                    1,
+                    65535,
+                    out int restApiPort))
+            {
+                return false;
+            }
+
+            if (!TryReadInteger(
+                    ChatPostLimitTextBox.Text,
+                    "Chat Post Limit",
+                    1,
+                    10000,
+                    out int chatPostLimit))
+            {
+                return false;
+            }
+
+            string deathPenalty =
+                DeathPenaltyComboBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    deathPenalty))
+            {
+                ShowValidationError(
+                    "Select a Death Penalty value.");
+
+                return false;
+            }
+
+            settings =
+                new ServerSettings
+                {
+                    // Server
+                    ServerName =
+                        ServerNameTextBox.Text,
+
+                    ServerDescription =
+                        DescriptionTextBox.Text,
+
+                    ServerPlayerMaxNum =
+                        maximumPlayers,
+
+                    AdminPassword =
+                        AdminPasswordBox.Password,
+
+                    ServerPassword =
+                        ServerPasswordBox.Password,
+
+                    // Gameplay
+                    ExpRate =
+                        expRate,
+
+                    PalCaptureRate =
+                        captureRate,
+
+                    PalSpawnNumRate =
+                        spawnRate,
+
+                    DayTimeSpeedRate =
+                        daytimeSpeed,
+
+                    NightTimeSpeedRate =
+                        nighttimeSpeed,
+
+                    WorkSpeedRate =
+                        workSpeed,
+
+                    // PvP and hardcore
+                    IsPvP =
+                        PvpCheckBox.IsChecked == true,
+
+                    IsHardcore =
+                        HardcoreCheckBox.IsChecked == true,
+
+                    EnableFriendlyFire =
+                        FriendlyFireCheckBox.IsChecked == true,
+
+                    CharacterRecreateInHardcore =
+                        CharacterRecreateCheckBox.IsChecked == true,
+
+                    DeathPenalty =
+                        deathPenalty,
+
+                    // Bases and guilds
+                    BaseCampWorkerMaxNum =
+                        workersPerBase,
+
+                    GuildPlayerMaxNum =
+                        guildPlayers,
+
+                    BaseCampMaxNumInGuild =
+                        basesPerGuild,
+
+                    BaseCampMaxNum =
+                        maximumBaseCamps,
+
+                    // Network
+                    PublicIP =
+                        PublicIpTextBox.Text.Trim(),
+
+                    PublicPort =
+                        publicPort,
+
+                    RconEnabled =
+                        RconEnabledCheckBox.IsChecked == true,
+
+                    RconPort =
+                        rconPort,
+
+                    RestApiEnabled =
+                        RestApiEnabledCheckBox.IsChecked == true,
+
+                    RestApiPort =
+                        restApiPort,
+
+                    // Advanced
+                    UseAuth =
+                        UseAuthCheckBox.IsChecked == true,
+
+                    AllowClientMod =
+                        AllowClientModCheckBox.IsChecked == true,
+
+                    IsUseBackupSaveData =
+                        BackupSaveDataCheckBox.IsChecked == true,
+
+                    ShowPlayerList =
+                        ShowPlayerListCheckBox.IsChecked == true,
+
+                    ChatPostLimitPerMinute =
+                        chatPostLimit
+                };
+
+            return true;
+        }
+
+        private void SaveButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    _settingsFilePath))
+            {
+                MessageBox.Show(
+                    "Load a settings file first.",
+                    "No File Loaded",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!TryCreateSettingsFromEditor(
+                    out ServerSettings updatedSettings))
+            {
+                return;
+            }
+
+            try
+            {
+                string updatedContents =
+                    _settingsService.ApplySettings(
+                        _fileContents,
+                        updatedSettings);
+
+                string backupPath =
+                    _settingsService.CreateBackup(
+                        _settingsFilePath);
+
+                _settingsService.SaveFile(
+                    _settingsFilePath,
+                    updatedContents);
+
+                _fileContents =
+                    updatedContents;
+
+                _currentSettings =
+                    updatedSettings;
+
+                UpdateDashboard(
+                    updatedSettings);
+
+                StatusTextBlock.Text =
+                    $"Saved: {_settingsFilePath}" +
+                    $"\nBackup: {backupPath}";
+
+                MessageBox.Show(
+                    "Settings saved successfully." +
+                    $"\n\nBackup created:\n{backupPath}",
+                    "Saved",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not save the settings file." +
+                    $"\n\n{ex.Message}",
+                    "Save Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void UpdateDashboard(
+            ServerSettings settings)
         {
             DashboardServerNameText.Text =
-                string.IsNullOrWhiteSpace(ServerNameTextBox.Text)
+                string.IsNullOrWhiteSpace(
+                    settings.ServerName)
                     ? "Unnamed Server"
-                    : ServerNameTextBox.Text;
+                    : settings.ServerName;
 
             DashboardPlayerLimitText.Text =
-                string.IsNullOrWhiteSpace(MaxPlayersTextBox.Text)
-                    ? "—"
-                    : MaxPlayersTextBox.Text;
+                settings.ServerPlayerMaxNum.ToString(
+                    CultureInfo.InvariantCulture);
 
             DashboardExpRateText.Text =
-                string.IsNullOrWhiteSpace(ExpRateTextBox.Text)
-                    ? "—"
-                    : $"{FormatDashboardDecimal(ExpRateTextBox.Text)}x";
-
-            bool pvpEnabled =
-                PvpCheckBox.IsChecked == true;
-
-            bool hardcoreEnabled =
-                HardcoreCheckBox.IsChecked == true;
+                $"{FormatDashboardDecimal(settings.ExpRate)}x";
 
             DashboardPvpText.Text =
-                pvpEnabled
+                settings.IsPvP
                     ? "Enabled"
                     : "Disabled";
 
             DashboardPvpText.Foreground =
-                pvpEnabled
+                settings.IsPvP
                     ? GetBrush("SuccessColor")
                     : GetBrush("MutedTextColor");
 
             DashboardHardcoreText.Text =
-                hardcoreEnabled
+                settings.IsHardcore
                     ? "Enabled"
                     : "Disabled";
 
             DashboardHardcoreText.Foreground =
-                hardcoreEnabled
+                settings.IsHardcore
                     ? GetBrush("WarningColor")
                     : GetBrush("MutedTextColor");
 
             DashboardGameModeText.Text =
-                hardcoreEnabled
-                    ? "Hardcore"
-                    : pvpEnabled
-                        ? "PvP"
-                        : "Standard";
+                settings.GameMode;
 
             DashboardPortText.Text =
-                string.IsNullOrWhiteSpace(PublicPortTextBox.Text)
-                    ? "—"
-                    : PublicPortTextBox.Text;
+                settings.PublicPort.ToString(
+                    CultureInfo.InvariantCulture);
 
             DashboardStatusDot.Fill =
                 GetBrush("SuccessColor");
@@ -270,104 +626,6 @@ namespace PalWorldServerManager
 
             DashboardStatusDescription.Text =
                 _settingsFilePath ?? "";
-        }
-
-        private string FormatDashboardDecimal(string text)
-        {
-            if (!double.TryParse(
-                    text,
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out double value))
-            {
-                return text;
-            }
-
-            return value.ToString(
-                "0.######",
-                CultureInfo.InvariantCulture);
-        }
-
-        private Brush GetBrush(string resourceName)
-        {
-            return (Brush)FindResource(resourceName);
-        }
-
-        private string GetSettingValue(string settingName)
-        {
-            string pattern =
-                $@"(?:^|,){Regex.Escape(settingName)}=(?:""(?<quoted>(?:\\.|[^""])*)""|(?<plain>[^,\)]*))";
-
-            Match match = Regex.Match(
-                _fileContents,
-                pattern);
-
-            if (!match.Success)
-            {
-                return "";
-            }
-
-            if (match.Groups["quoted"].Success)
-            {
-                return UnescapeIniText(
-                    match.Groups["quoted"].Value);
-            }
-
-            return match.Groups["plain"].Value.Trim();
-        }
-
-        private bool GetBooleanSetting(string settingName)
-        {
-            return GetSettingValue(settingName)
-                .Equals(
-                    "True",
-                    StringComparison.OrdinalIgnoreCase);
-        }
-
-        private string SetSettingValue(
-            string contents,
-            string settingName,
-            string newValue,
-            bool useQuotes)
-        {
-            string formattedValue = useQuotes
-                ? $"\"{EscapeIniText(newValue)}\""
-                : newValue;
-
-            string pattern =
-                $@"(?<prefix>(?:^|,){Regex.Escape(settingName)}=)(?:""(?:\\.|[^""])*""|[^,\)]*)";
-
-            Match match = Regex.Match(
-                contents,
-                pattern);
-
-            if (!match.Success)
-            {
-                throw new InvalidDataException(
-                    $"The setting '{settingName}' was not found.");
-            }
-
-            string replacement =
-                match.Groups["prefix"].Value +
-                formattedValue;
-
-            return contents
-                .Remove(match.Index, match.Length)
-                .Insert(match.Index, replacement);
-        }
-
-        private string EscapeIniText(string value)
-        {
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"");
-        }
-
-        private string UnescapeIniText(string value)
-        {
-            return value
-                .Replace("\\\"", "\"")
-                .Replace("\\\\", "\\");
         }
 
         private bool TryReadInteger(
@@ -389,10 +647,12 @@ namespace PalWorldServerManager
                 return false;
             }
 
-            if (value < minimum || value > maximum)
+            if (value < minimum ||
+                value > maximum)
             {
                 ShowValidationError(
-                    $"{displayName} must be between {minimum} and {maximum}.");
+                    $"{displayName} must be between " +
+                    $"{minimum} and {maximum}.");
 
                 return false;
             }
@@ -419,10 +679,12 @@ namespace PalWorldServerManager
                 return false;
             }
 
-            if (value < minimum || value > maximum)
+            if (value < minimum ||
+                value > maximum)
             {
                 ShowValidationError(
-                    $"{displayName} must be between {minimum} and {maximum}.");
+                    $"{displayName} must be between " +
+                    $"{minimum} and {maximum}.");
 
                 return false;
             }
@@ -430,7 +692,8 @@ namespace PalWorldServerManager
             return true;
         }
 
-        private void ShowValidationError(string message)
+        private void ShowValidationError(
+            string message)
         {
             MessageBox.Show(
                 message,
@@ -439,456 +702,27 @@ namespace PalWorldServerManager
                 MessageBoxImage.Warning);
         }
 
-        private void SaveButton_Click(
-            object sender,
-            RoutedEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(_settingsFilePath))
-            {
-                MessageBox.Show(
-                    "Load a settings file first.",
-                    "No File Loaded",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-
-                return;
-            }
-
-            if (!TryReadInteger(
-                    MaxPlayersTextBox.Text,
-                    "Maximum Players",
-                    1,
-                    1000,
-                    out int maxPlayers))
-            {
-                return;
-            }
-
-            if (!TryReadDecimal(
-                    ExpRateTextBox.Text,
-                    "XP Rate",
-                    0,
-                    1000,
-                    out double expRate))
-            {
-                return;
-            }
-
-            if (!TryReadDecimal(
-                    PalCaptureRateTextBox.Text,
-                    "Pal Capture Rate",
-                    0,
-                    1000,
-                    out double captureRate))
-            {
-                return;
-            }
-
-            if (!TryReadDecimal(
-                    PalSpawnRateTextBox.Text,
-                    "Pal Spawn Rate",
-                    0,
-                    1000,
-                    out double spawnRate))
-            {
-                return;
-            }
-
-            if (!TryReadDecimal(
-                    DayTimeSpeedTextBox.Text,
-                    "Daytime Speed Rate",
-                    0,
-                    1000,
-                    out double daySpeed))
-            {
-                return;
-            }
-
-            if (!TryReadDecimal(
-                    NightTimeSpeedTextBox.Text,
-                    "Nighttime Speed Rate",
-                    0,
-                    1000,
-                    out double nightSpeed))
-            {
-                return;
-            }
-
-            if (!TryReadDecimal(
-                    WorkSpeedTextBox.Text,
-                    "Work Speed Rate",
-                    0,
-                    1000,
-                    out double workSpeed))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    BaseWorkersTextBox.Text,
-                    "Workers Per Base",
-                    1,
-                    1000,
-                    out int baseWorkers))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    GuildPlayersTextBox.Text,
-                    "Maximum Guild Players",
-                    1,
-                    1000,
-                    out int guildPlayers))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    BasesPerGuildTextBox.Text,
-                    "Bases Per Guild",
-                    1,
-                    1000,
-                    out int basesPerGuild))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    BaseCampMaxTextBox.Text,
-                    "Maximum Total Base Camps",
-                    1,
-                    10000,
-                    out int maximumBaseCamps))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    PublicPortTextBox.Text,
-                    "Public Port",
-                    1,
-                    65535,
-                    out int publicPort))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    RconPortTextBox.Text,
-                    "RCON Port",
-                    1,
-                    65535,
-                    out int rconPort))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    RestApiPortTextBox.Text,
-                    "REST API Port",
-                    1,
-                    65535,
-                    out int restApiPort))
-            {
-                return;
-            }
-
-            if (!TryReadInteger(
-                    ChatPostLimitTextBox.Text,
-                    "Chat Post Limit",
-                    1,
-                    10000,
-                    out int chatPostLimit))
-            {
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(
-                    DeathPenaltyComboBox.Text))
-            {
-                ShowValidationError(
-                    "Select a Death Penalty value.");
-
-                return;
-            }
-
-            try
-            {
-                string updatedContents =
-                    _fileContents;
-
-                // Server settings
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "ServerName",
-                    ServerNameTextBox.Text,
-                    true);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "ServerDescription",
-                    DescriptionTextBox.Text,
-                    true);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "ServerPlayerMaxNum",
-                    maxPlayers);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "AdminPassword",
-                    AdminPasswordBox.Password,
-                    true);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "ServerPassword",
-                    ServerPasswordBox.Password,
-                    true);
-
-                // Gameplay settings
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "ExpRate",
-                    FormatDecimal(expRate),
-                    false);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "PalCaptureRate",
-                    FormatDecimal(captureRate),
-                    false);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "PalSpawnNumRate",
-                    FormatDecimal(spawnRate),
-                    false);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "DayTimeSpeedRate",
-                    FormatDecimal(daySpeed),
-                    false);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "NightTimeSpeedRate",
-                    FormatDecimal(nightSpeed),
-                    false);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "WorkSpeedRate",
-                    FormatDecimal(workSpeed),
-                    false);
-
-                // PvP and hardcore settings
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bIsPvP",
-                    PvpCheckBox.IsChecked == true);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bHardcore",
-                    HardcoreCheckBox.IsChecked == true);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bEnableFriendlyFire",
-                    FriendlyFireCheckBox.IsChecked == true);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bCharacterRecreateInHardcore",
-                    CharacterRecreateCheckBox.IsChecked == true);
-
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "DeathPenalty",
-                    DeathPenaltyComboBox.Text.Trim(),
-                    false);
-
-                // Base and guild settings
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "BaseCampWorkerMaxNum",
-                    baseWorkers);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "GuildPlayerMaxNum",
-                    guildPlayers);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "BaseCampMaxNumInGuild",
-                    basesPerGuild);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "BaseCampMaxNum",
-                    maximumBaseCamps);
-
-                // Network settings
-                updatedContents = SetSettingValue(
-                    updatedContents,
-                    "PublicIP",
-                    PublicIpTextBox.Text.Trim(),
-                    true);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "PublicPort",
-                    publicPort);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "RCONEnabled",
-                    RconEnabledCheckBox.IsChecked == true);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "RCONPort",
-                    rconPort);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "RESTAPIEnabled",
-                    RestApiEnabledCheckBox.IsChecked == true);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "RESTAPIPort",
-                    restApiPort);
-
-                // Advanced settings
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bUseAuth",
-                    UseAuthCheckBox.IsChecked == true);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bAllowClientMod",
-                    AllowClientModCheckBox.IsChecked == true);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bIsUseBackupSaveData",
-                    BackupSaveDataCheckBox.IsChecked == true);
-
-                updatedContents = SetBooleanSetting(
-                    updatedContents,
-                    "bShowPlayerList",
-                    ShowPlayerListCheckBox.IsChecked == true);
-
-                updatedContents = SetIntegerSetting(
-                    updatedContents,
-                    "ChatPostLimitPerMinute",
-                    chatPostLimit);
-
-                string backupPath =
-                    CreateBackupFile();
-
-                File.WriteAllText(
-                    _settingsFilePath,
-                    updatedContents);
-
-                _fileContents =
-                    updatedContents;
-
-                UpdateDashboard();
-
-                StatusTextBlock.Text =
-                    $"Saved: {_settingsFilePath}\nBackup: {backupPath}";
-
-                MessageBox.Show(
-                    $"Settings saved successfully.\n\nBackup created:\n{backupPath}",
-                    "Saved",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Could not save the settings file.\n\n{ex.Message}",
-                    "Save Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
-        }
-
-        private string SetBooleanSetting(
-            string contents,
-            string settingName,
-            bool value)
-        {
-            return SetSettingValue(
-                contents,
-                settingName,
-                value ? "True" : "False",
-                false);
-        }
-
-        private string SetIntegerSetting(
-            string contents,
-            string settingName,
-            int value)
-        {
-            return SetSettingValue(
-                contents,
-                settingName,
-                value.ToString(
-                    CultureInfo.InvariantCulture),
-                false);
-        }
-
-        private string FormatDecimal(double value)
+        private static string FormatEditorDecimal(
+            double value)
         {
             return value.ToString(
                 "0.000000",
                 CultureInfo.InvariantCulture);
         }
 
-        private string CreateBackupFile()
+        private static string FormatDashboardDecimal(
+            double value)
         {
-            if (string.IsNullOrWhiteSpace(_settingsFilePath))
-            {
-                throw new InvalidOperationException(
-                    "No settings file is loaded.");
-            }
+            return value.ToString(
+                "0.######",
+                CultureInfo.InvariantCulture);
+        }
 
-            string directory =
-                Path.GetDirectoryName(_settingsFilePath)
-                ?? "";
-
-            string fileNameWithoutExtension =
-                Path.GetFileNameWithoutExtension(
-                    _settingsFilePath);
-
-            string extension =
-                Path.GetExtension(_settingsFilePath);
-
-            string timeStamp =
-                DateTime.Now.ToString(
-                    "yyyyMMdd-HHmmss",
-                    CultureInfo.InvariantCulture);
-
-            string backupPath =
-                Path.Combine(
-                    directory,
-                    $"{fileNameWithoutExtension}.{timeStamp}.backup{extension}");
-
-            File.Copy(
-                _settingsFilePath,
-                backupPath,
-                overwrite: false);
-
-            return backupPath;
+        private Brush GetBrush(
+            string resourceName)
+        {
+            return (Brush)FindResource(
+                resourceName);
         }
     }
 }
