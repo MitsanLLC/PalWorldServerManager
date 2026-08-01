@@ -51,6 +51,9 @@ namespace PalWorldServerManager
         private DateTime? _lastCrashTime;
         private bool _previousServerRunning;
         private int _restApiFailureCount;
+        private string? _startupDiagnosticMessage;
+        private DateTime? _serverStartAttemptTime;
+        private bool _serverStartValidationPending;
         private readonly DispatcherTimer _crashRecoveryTimer;
         private DateTime? _crashRecoveryTargetTime;
         private int _crashRecoveryAttemptCount;
@@ -75,6 +78,7 @@ namespace PalWorldServerManager
             WirePlayerEvents();
             WireModEvents();
             WireMetricsEvents();
+            DismissStartupDiagnosticsButton.Click += DismissStartupDiagnosticsButton_Click;
 
             _serverProcessService.OutputReceived += ServerProcessService_OutputReceived;
             _serverProcessService.ErrorReceived += ServerProcessService_ErrorReceived;
@@ -931,6 +935,17 @@ namespace PalWorldServerManager
 
                 _restApiFailureCount = 0;
 
+                if (_serverStartValidationPending)
+                {
+                    _serverStartValidationPending = false;
+                    _serverStartAttemptTime = null;
+
+                    if (StartupDiagnosticsCard.Visibility != Visibility.Visible)
+                    {
+                        ClearStartupDiagnostic();
+                    }
+                }
+
                 EvaluateServerHealth(
                     metrics);
 
@@ -1490,6 +1505,156 @@ namespace PalWorldServerManager
                 "The player list will be available while the Palworld server is running.";
         }
 
+        private void DismissStartupDiagnosticsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            ClearStartupDiagnostic();
+        }
+
+        private void ClearStartupDiagnostic()
+        {
+            _startupDiagnosticMessage = null;
+            StartupDiagnosticsCard.Visibility = Visibility.Collapsed;
+            StartupDiagnosticsTitle.Text = "Startup Warning";
+            StartupDiagnosticsDescription.Text = "";
+            StartupDiagnosticsDetails.Text = "";
+        }
+
+        private void ShowStartupDiagnostic(
+            string title,
+            string description,
+            string details)
+        {
+            string signature =
+                $"{title}|{description}|{details}";
+
+            if (string.Equals(
+                    _startupDiagnosticMessage,
+                    signature,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _startupDiagnosticMessage =
+                signature;
+
+            StartupDiagnosticsTitle.Text =
+                title;
+
+            StartupDiagnosticsDescription.Text =
+                description;
+
+            StartupDiagnosticsDetails.Text =
+                details;
+
+            StartupDiagnosticsCard.Visibility =
+                Visibility.Visible;
+
+            AddActivity(
+                $"STARTUP DIAGNOSTIC: {description}");
+        }
+
+        private void InspectServerOutputForStartupProblems(
+            string message)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    message))
+            {
+                return;
+            }
+
+            string normalized =
+                message.ToLowerInvariant();
+
+            if (normalized.Contains(
+                    "bind couldn't find an open port"))
+            {
+                string port =
+                    ExtractFirstPortNumber(
+                        message);
+
+                string portText =
+                    string.IsNullOrWhiteSpace(port)
+                        ? "A configured server port"
+                        : $"Port {port}";
+
+                ShowStartupDiagnostic(
+                    "Port Conflict Detected",
+                    $"{portText} is already in use. Another PalServer instance or another application may still be using that port.",
+                    message);
+
+                return;
+            }
+
+            if (normalized.Contains(
+                    "address already in use") ||
+                normalized.Contains(
+                    "failed to bind"))
+            {
+                ShowStartupDiagnostic(
+                    "Port Binding Failed",
+                    "PalServer could not bind to one of its configured network ports.",
+                    message);
+
+                return;
+            }
+
+            if (normalized.Contains(
+                    "fatal error") ||
+                normalized.Contains(
+                    "critical error"))
+            {
+                ShowStartupDiagnostic(
+                    "PalServer Startup Error",
+                    "PalServer reported a fatal startup error. Review the Console for the surrounding server output.",
+                    message);
+            }
+        }
+
+        private static string ExtractFirstPortNumber(
+            string message)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    message))
+            {
+                return "";
+            }
+
+            string[] tokens =
+                message.Split(
+                    new[]
+                    {
+                        ' ',
+                        ':',
+                        ',',
+                        ';',
+                        '(',
+                        ')',
+                        '[',
+                        ']'
+                    },
+                    StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string token in tokens)
+            {
+                if (int.TryParse(
+                        token,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int value) &&
+                    value >= 1024 &&
+                    value <= 65535)
+                {
+                    return value.ToString(
+                        CultureInfo.InvariantCulture);
+                }
+            }
+
+            return "";
+        }
+
         private void ServerProcessService_OutputReceived(
             object? sender,
             string message)
@@ -1504,6 +1669,9 @@ namespace PalWorldServerManager
                 {
                     AddActivity(
                         $"SERVER: {message}");
+
+                    InspectServerOutputForStartupProblems(
+                        message);
                 });
         }
 
@@ -1521,6 +1689,9 @@ namespace PalWorldServerManager
                 {
                     AddActivity(
                         $"SERVER ERROR: {message}");
+
+                    InspectServerOutputForStartupProblems(
+                        message);
                 });
         }
 
@@ -3566,7 +3737,15 @@ namespace PalWorldServerManager
             {
                 SavePreferencesFromControls();
                 CancelCrashRecovery();
-                _serverProcessService.StartServer(_preferences.ServerExecutablePath, _preferences.LaunchArguments);
+                ClearStartupDiagnostic();
+
+                _serverStartAttemptTime = DateTime.Now;
+                _serverStartValidationPending = true;
+
+                _serverProcessService.StartServer(
+                    _preferences.ServerExecutablePath,
+                    _preferences.LaunchArguments);
+
                 AddActivity("Palworld server started.");
                 UpdateServerProcessDisplay();
                 _previousServerRunning = true;
@@ -3771,9 +3950,15 @@ namespace PalWorldServerManager
 
                 await Task.Delay(1500);
 
+                ClearStartupDiagnostic();
+
+                _serverStartAttemptTime = DateTime.Now;
+                _serverStartValidationPending = true;
+
                 _serverProcessService.StartServer(
                     _preferences.ServerExecutablePath,
                     _preferences.LaunchArguments);
+
                 AddActivity("Palworld server restarted successfully.");
 
                 UpdateServerProcessDisplay();
@@ -3929,6 +4114,36 @@ namespace PalWorldServerManager
 
             _previousServerRunning =
                 runningNow;
+
+            if (_serverStartValidationPending &&
+                _serverStartAttemptTime.HasValue)
+            {
+                TimeSpan startupElapsed =
+                    DateTime.Now -
+                    _serverStartAttemptTime.Value;
+
+                if (!runningNow &&
+                    startupElapsed >= TimeSpan.FromSeconds(3))
+                {
+                    _serverStartValidationPending = false;
+
+                    ShowStartupDiagnostic(
+                        "Server Exited During Startup",
+                        "PalServer exited shortly after it was started.",
+                        "Review the Console for startup errors such as port conflicts, missing files, or mod failures.");
+                }
+                else if (runningNow &&
+                         startupElapsed >= TimeSpan.FromSeconds(20) &&
+                         _restApiFailureCount >= 2)
+                {
+                    _serverStartValidationPending = false;
+
+                    ShowStartupDiagnostic(
+                        "REST API Did Not Come Online",
+                        "PalServer is running, but the REST API is not responding after startup.",
+                        "Verify that REST API is enabled in the active PalWorldSettings.ini, confirm the REST API port, and restart PalServer.");
+                }
+            }
 
             _serverStatusTickCount++;
 
