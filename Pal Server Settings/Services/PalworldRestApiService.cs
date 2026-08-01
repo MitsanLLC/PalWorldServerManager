@@ -156,6 +156,109 @@ namespace PalWorldServerManager.Services
                     "The server returned an empty metrics response.");
         }
 
+        public async Task KickPlayerAsync(
+            int port,
+            string adminPassword,
+            string userId,
+            string message,
+            CancellationToken cancellationToken = default)
+        {
+            ValidateUserId(userId);
+
+            PlayerModerationRequest body =
+                new PlayerModerationRequest
+                {
+                    UserId = userId.Trim(),
+                    Message = message ?? ""
+                };
+
+            using HttpRequestMessage request =
+                CreateJsonRequest(
+                    HttpMethod.Post,
+                    port,
+                    "kick",
+                    adminPassword,
+                    body);
+
+            using HttpResponseMessage response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            await EnsureSuccessAsync(
+                response,
+                "kick the player",
+                cancellationToken);
+        }
+
+        public async Task BanPlayerAsync(
+            int port,
+            string adminPassword,
+            string userId,
+            string message,
+            CancellationToken cancellationToken = default)
+        {
+            ValidateUserId(userId);
+
+            PlayerModerationRequest body =
+                new PlayerModerationRequest
+                {
+                    UserId = userId.Trim(),
+                    Message = message ?? ""
+                };
+
+            using HttpRequestMessage request =
+                CreateJsonRequest(
+                    HttpMethod.Post,
+                    port,
+                    "ban",
+                    adminPassword,
+                    body);
+
+            using HttpResponseMessage response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            await EnsureSuccessAsync(
+                response,
+                "ban the player",
+                cancellationToken);
+        }
+
+        public async Task UnbanPlayerAsync(
+            int port,
+            string adminPassword,
+            string userId,
+            CancellationToken cancellationToken = default)
+        {
+            ValidateUserId(userId);
+
+            UnbanPlayerRequest body =
+                new UnbanPlayerRequest
+                {
+                    UserId = userId.Trim()
+                };
+
+            using HttpRequestMessage request =
+                CreateJsonRequest(
+                    HttpMethod.Post,
+                    port,
+                    "unban",
+                    adminPassword,
+                    body);
+
+            using HttpResponseMessage response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            await EnsureSuccessAsync(
+                response,
+                "unban the player",
+                cancellationToken);
+        }
+
         public async Task SaveWorldAsync(
             int port,
             string adminPassword,
@@ -362,6 +465,17 @@ namespace PalWorldServerManager.Services
                 encodedCredentials);
         }
 
+        private static void ValidateUserId(
+            string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                throw new ArgumentException(
+                    "A player User ID is required.",
+                    nameof(userId));
+            }
+        }
+
         private static void ValidateConnectionSettings(
             int port,
             string adminPassword)
@@ -504,6 +618,21 @@ namespace PalWorldServerManager.Services
 
         [JsonPropertyName("days")]
         public int WorldDays { get; set; }
+    }
+
+    internal sealed class UnbanPlayerRequest
+    {
+        [JsonPropertyName("userid")]
+        public string UserId { get; set; } = "";
+    }
+
+    internal sealed class PlayerModerationRequest
+    {
+        [JsonPropertyName("userid")]
+        public string UserId { get; set; } = "";
+
+        [JsonPropertyName("message")]
+        public string Message { get; set; } = "";
     }
 
     internal sealed class ShutdownRequest

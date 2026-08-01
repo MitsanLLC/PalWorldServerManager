@@ -3,10 +3,12 @@ using PalWorldServerManager.Models;
 using PalWorldServerManager.Services;
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -20,7 +22,20 @@ namespace PalWorldServerManager
         private readonly AppPreferencesService _preferencesService = new();
         private readonly PalworldRestApiService _restApiService = new();
         private readonly DispatcherTimer _serverStatusTimer;
+        private readonly DispatcherTimer _autoSaveTimer;
+        private readonly DispatcherTimer _restartScheduleTimer;
+        private readonly DispatcherTimer _scheduledBackupTimer;
         private readonly ObservableCollection<string> _activityLog = new();
+        private bool _metricsRefreshInProgress;
+        private int _serverStatusTickCount;
+        private DateTime? _lastWorldSaveTime;
+        private DateTime? _nextAutoSaveTime;
+        private bool _autoSaveInProgress;
+        private DateTime? _nextRestartTime;
+        private bool _scheduledRestartInProgress;
+        private readonly HashSet<string> _restartWarningsSent = new();
+        private DateTime? _nextScheduledBackupTime;
+        private bool _scheduledBackupInProgress;
 
         private string? _settingsFilePath;
         private string _fileContents = "";
@@ -37,6 +52,7 @@ namespace PalWorldServerManager
             WireServerControlEvents();
             WireConsoleEvents();
             WirePlayerEvents();
+            WireMetricsEvents();
             UpdateBackupPageForNoFile();
 
             _serverStatusTimer = new DispatcherTimer
@@ -45,6 +61,20 @@ namespace PalWorldServerManager
             };
             _serverStatusTimer.Tick += ServerStatusTimer_Tick;
             _serverStatusTimer.Start();
+
+            _autoSaveTimer = new DispatcherTimer();
+            _autoSaveTimer.Tick += AutoSaveTimer_Tick;
+
+            _restartScheduleTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _restartScheduleTimer.Tick += RestartScheduleTimer_Tick;
+
+            _scheduledBackupTimer = new DispatcherTimer();
+            _scheduledBackupTimer.Tick += ScheduledBackupTimer_Tick;
+
+            WireSchedulerEvents();
 
             if (_preferences.AttachToRunningServerOnStartup)
             {
@@ -73,12 +103,360 @@ namespace PalWorldServerManager
             StopServerButton.Click += StopServerButton_Click;
             RestartServerButton.Click += RestartServerButton_Click;
             ForceStopServerButton.Click += ForceStopServerButton_Click;
+            SaveWorldButton.Click += SaveWorldButton_Click;
+        }
+
+        private void WireMetricsEvents()
+        {
+            RefreshMetricsButton.Click += RefreshMetricsButton_Click;
+            ResetLiveMetricsDisplay();
+        }
+
+        private async void RefreshMetricsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            await RefreshLiveMetricsAsync(
+                logResult: true);
+        }
+
+        private async Task RefreshLiveMetricsAsync(
+            bool logResult = false)
+        {
+            if (_metricsRefreshInProgress)
+            {
+                return;
+            }
+
+            if (!_serverProcessService.IsRunning ||
+                _currentSettings is null ||
+                !_currentSettings.RestApiEnabled ||
+                string.IsNullOrWhiteSpace(_currentSettings.AdminPassword))
+            {
+                ResetLiveMetricsDisplay();
+                return;
+            }
+
+            _metricsRefreshInProgress = true;
+            RefreshMetricsButton.IsEnabled = false;
+
+            try
+            {
+                PalworldServerMetrics metrics =
+                    await _restApiService.GetMetricsAsync(
+                        _currentSettings.RestApiPort,
+                        _currentSettings.AdminPassword);
+
+                LivePlayersText.Text =
+                    $"{metrics.CurrentPlayerCount} / {metrics.MaximumPlayerCount}";
+
+                LiveServerFpsText.Text =
+                    metrics.ServerFps.ToString(
+                        CultureInfo.InvariantCulture);
+
+                LiveWorldUptimeText.Text =
+                    FormatUptime(
+                        TimeSpan.FromSeconds(
+                            Math.Max(
+                                0,
+                                metrics.UptimeSeconds)));
+
+                LiveWorldDayText.Text =
+                    metrics.WorldDays.ToString(
+                        CultureInfo.InvariantCulture);
+
+                LiveBaseCountText.Text =
+                    metrics.BaseCampCount.ToString(
+                        CultureInfo.InvariantCulture);
+
+                LiveMetricsStatusText.Text =
+                    $"REST API connected • Frame time {metrics.ServerFrameTime:0.00} ms";
+
+                if (logResult)
+                {
+                    AddActivity(
+                        $"Metrics refreshed: {metrics.CurrentPlayerCount}/{metrics.MaximumPlayerCount} players, {metrics.ServerFps} FPS.");
+                }
+            }
+            catch (Exception ex)
+            {
+                ResetLiveMetricsDisplay();
+
+                LiveMetricsStatusText.Text =
+                    $"Metrics unavailable: {ex.Message}";
+
+                if (logResult)
+                {
+                    AddActivity(
+                        $"Metrics refresh failed: {ex.Message}");
+                }
+            }
+            finally
+            {
+                RefreshMetricsButton.IsEnabled = true;
+                _metricsRefreshInProgress = false;
+            }
+        }
+
+        private void ResetLiveMetricsDisplay()
+        {
+            LivePlayersText.Text = "—";
+            LiveServerFpsText.Text = "—";
+            LiveWorldUptimeText.Text = "—";
+            LiveWorldDayText.Text = "—";
+            LiveBaseCountText.Text = "—";
+
+            LiveMetricsStatusText.Text =
+                "Metrics unavailable until the server is running and REST API is connected.";
         }
 
         private void WirePlayerEvents()
         {
             RefreshPlayersButton.Click += RefreshPlayersButton_Click;
+            PlayersListView.SelectionChanged += PlayersListView_SelectionChanged;
+            KickPlayerButton.Click += KickPlayerButton_Click;
+            BanPlayerButton.Click += BanPlayerButton_Click;
+            UnbanPlayerButton.Click += UnbanPlayerButton_Click;
             UpdatePlayersPageForUnavailableServer();
+        }
+
+        private void PlayersListView_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            bool selected =
+                PlayersListView.SelectedItem is PalworldPlayer;
+
+            KickPlayerButton.IsEnabled =
+                selected;
+
+            BanPlayerButton.IsEnabled =
+                selected;
+
+            if (PlayersListView.SelectedItem is PalworldPlayer player)
+            {
+                SelectedPlayerText.Text =
+                    $"Selected: {player.Name} ({player.UserId})";
+            }
+            else
+            {
+                SelectedPlayerText.Text =
+                    "Select a player above to enable administration controls.";
+            }
+        }
+
+        private async void KickPlayerButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (PlayersListView.SelectedItem is not PalworldPlayer player)
+            {
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    $"Kick {player.Name} from the server?\n\n" +
+                    $"User ID: {player.UserId}",
+                    "Confirm Kick",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                KickPlayerButton.IsEnabled = false;
+                BanPlayerButton.IsEnabled = false;
+
+                await _restApiService.KickPlayerAsync(
+                    restApiPort,
+                    adminPassword,
+                    player.UserId,
+                    "You were removed by a server administrator.");
+
+                AddActivity(
+                    $"Player kicked: {player.Name} ({player.UserId})");
+
+                await Task.Delay(750);
+                await RefreshPlayersAsync();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Kick failed for {player.Name}: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not kick the selected player.\n\n" +
+                    ex.Message,
+                    "Kick Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                PlayersListView_SelectionChanged(
+                    PlayersListView,
+                    new SelectionChangedEventArgs(
+                        Selector.SelectionChangedEvent,
+                        Array.Empty<object>(),
+                        Array.Empty<object>()));
+            }
+        }
+
+        private async void BanPlayerButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (PlayersListView.SelectedItem is not PalworldPlayer player)
+            {
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    $"BAN {player.Name} from this server?\n\n" +
+                    $"User ID: {player.UserId}\n\n" +
+                    "This is more permanent than kicking the player.",
+                    "Confirm Ban",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                KickPlayerButton.IsEnabled = false;
+                BanPlayerButton.IsEnabled = false;
+
+                await _restApiService.BanPlayerAsync(
+                    restApiPort,
+                    adminPassword,
+                    player.UserId,
+                    "You were banned by a server administrator.");
+
+                AddActivity(
+                    $"Player banned: {player.Name} ({player.UserId})");
+
+                await Task.Delay(750);
+                await RefreshPlayersAsync();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Ban failed for {player.Name}: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not ban the selected player.\n\n" +
+                    ex.Message,
+                    "Ban Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                PlayersListView_SelectionChanged(
+                    PlayersListView,
+                    new SelectionChangedEventArgs(
+                        Selector.SelectionChangedEvent,
+                        Array.Empty<object>(),
+                        Array.Empty<object>()));
+            }
+        }
+
+        private async void UnbanPlayerButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            string userId =
+                UnbanUserIdTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                MessageBox.Show(
+                    "Enter the banned player's User ID first.",
+                    "User ID Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    $"Unban this player?\n\nUser ID: {userId}",
+                    "Confirm Unban",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            UnbanPlayerButton.IsEnabled = false;
+
+            try
+            {
+                await _restApiService.UnbanPlayerAsync(
+                    restApiPort,
+                    adminPassword,
+                    userId);
+
+                AddActivity(
+                    $"Player unbanned: {userId}");
+
+                UnbanUserIdTextBox.Clear();
+
+                MessageBox.Show(
+                    $"Player unbanned successfully.\n\nUser ID: {userId}",
+                    "Player Unbanned",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Unban failed for {userId}: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not unban the player.\n\n" +
+                    ex.Message,
+                    "Unban Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                UnbanPlayerButton.IsEnabled = true;
+            }
         }
 
         private async void RefreshPlayersButton_Click(object sender, RoutedEventArgs e)
@@ -88,6 +466,7 @@ namespace PalWorldServerManager
 
         private async Task RefreshPlayersAsync()
         {
+            PlayersListView.SelectedItem = null;
             PlayersListView.ItemsSource = null;
             PlayersListView.Visibility = Visibility.Collapsed;
             NoPlayersPanel.Visibility = Visibility.Visible;
@@ -318,9 +697,852 @@ namespace PalWorldServerManager
             }
         }
 
+        private void WireSchedulerEvents()
+        {
+            StartAutoSaveButton.Click += StartAutoSaveButton_Click;
+            StopAutoSaveButton.Click += StopAutoSaveButton_Click;
+
+            RestartScheduleComboBox.SelectionChanged += RestartScheduleComboBox_SelectionChanged;
+            StartRestartScheduleButton.Click += StartRestartScheduleButton_Click;
+            CancelRestartScheduleButton.Click += CancelRestartScheduleButton_Click;
+
+            StartScheduledBackupButton.Click += StartScheduledBackupButton_Click;
+            StopScheduledBackupButton.Click += StopScheduledBackupButton_Click;
+
+            UpdateAutoSaveDisplay(false);
+            UpdateRestartScheduleDisplay(false);
+            UpdateScheduledBackupDisplay(false);
+            RestartScheduleComboBox_SelectionChanged(
+                RestartScheduleComboBox,
+                new SelectionChangedEventArgs(
+                    Selector.SelectionChangedEvent,
+                    Array.Empty<object>(),
+                    Array.Empty<object>()));
+        }
+
+        private void StartScheduledBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_settingsFilePath))
+            {
+                MessageBox.Show(
+                    "Load the active PalWorldSettings.ini first.",
+                    "Settings File Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!TryGetSelectedScheduledBackupInterval(
+                    out int intervalMinutes))
+            {
+                return;
+            }
+
+            _scheduledBackupTimer.Stop();
+
+            _scheduledBackupTimer.Interval =
+                TimeSpan.FromMinutes(
+                    intervalMinutes);
+
+            _nextScheduledBackupTime =
+                DateTime.Now.AddMinutes(
+                    intervalMinutes);
+
+            _scheduledBackupTimer.Start();
+
+            UpdateScheduledBackupDisplay(true);
+
+            AddActivity(
+                $"Configuration backup schedule enabled every {intervalMinutes} minutes.");
+        }
+
+        private void StopScheduledBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            _scheduledBackupTimer.Stop();
+            _nextScheduledBackupTime = null;
+
+            UpdateScheduledBackupDisplay(false);
+
+            AddActivity(
+                "Configuration backup schedule disabled.");
+        }
+
+        private void ScheduledBackupTimer_Tick(
+            object? sender,
+            EventArgs e)
+        {
+            if (_scheduledBackupInProgress)
+            {
+                return;
+            }
+
+            _scheduledBackupInProgress = true;
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(
+                        _settingsFilePath))
+                {
+                    AddActivity(
+                        "Scheduled configuration backup skipped because no settings file is loaded.");
+
+                    ScheduleNextConfigurationBackup();
+                    return;
+                }
+
+                string backupPath =
+                    _settingsService.CreateBackup(
+                        _settingsFilePath);
+
+                AddActivity(
+                    $"Scheduled configuration backup created: {System.IO.Path.GetFileName(backupPath)}");
+
+                RefreshBackupList();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Scheduled configuration backup failed: {ex.Message}");
+            }
+            finally
+            {
+                _scheduledBackupInProgress = false;
+                ScheduleNextConfigurationBackup();
+            }
+        }
+
+        private void ScheduleNextConfigurationBackup()
+        {
+            if (!_scheduledBackupTimer.IsEnabled)
+            {
+                return;
+            }
+
+            _nextScheduledBackupTime =
+                DateTime.Now.Add(
+                    _scheduledBackupTimer.Interval);
+
+            UpdateScheduledBackupDisplay(true);
+        }
+
+        private bool TryGetSelectedScheduledBackupInterval(
+            out int intervalMinutes)
+        {
+            intervalMinutes = 0;
+
+            if (ScheduledBackupIntervalComboBox.SelectedItem
+                    is not ComboBoxItem selectedItem ||
+                !int.TryParse(
+                    selectedItem.Tag?.ToString(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out intervalMinutes) ||
+                intervalMinutes <= 0)
+            {
+                MessageBox.Show(
+                    "Select a valid backup interval.",
+                    "Invalid Backup Interval",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private void UpdateScheduledBackupDisplay(
+            bool enabled)
+        {
+            StartScheduledBackupButton.IsEnabled =
+                !enabled;
+
+            StopScheduledBackupButton.IsEnabled =
+                enabled;
+
+            ScheduledBackupIntervalComboBox.IsEnabled =
+                !enabled;
+
+            ScheduledBackupStatusDot.Fill =
+                enabled
+                    ? GetBrush("SuccessColor")
+                    : GetBrush("WarningColor");
+
+            ScheduledBackupStatusTitle.Text =
+                enabled
+                    ? "Scheduled configuration backups enabled"
+                    : "Scheduled configuration backups disabled";
+
+            if (enabled &&
+                _nextScheduledBackupTime.HasValue)
+            {
+                ScheduledBackupStatusDescription.Text =
+                    $"PalWorldSettings.ini will be backed up every {_scheduledBackupTimer.Interval.TotalMinutes:0} minutes.";
+
+                NextScheduledBackupText.Text =
+                    _nextScheduledBackupTime.Value.ToString(
+                        "MMM d h:mm tt",
+                        CultureInfo.CurrentCulture);
+            }
+            else
+            {
+                ScheduledBackupStatusDescription.Text =
+                    "Choose an interval and click Start Backup Schedule.";
+
+                NextScheduledBackupText.Text =
+                    "—";
+            }
+        }
+
+        private void RestartScheduleComboBox_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            bool daily =
+                RestartScheduleComboBox.SelectedItem
+                    is ComboBoxItem item &&
+                string.Equals(
+                    item.Tag?.ToString(),
+                    "daily",
+                    StringComparison.OrdinalIgnoreCase);
+
+            DailyRestartTimeTextBox.IsEnabled =
+                daily &&
+                !_restartScheduleTimer.IsEnabled;
+        }
+
+        private void StartRestartScheduleButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!TryCalculateNextRestartTime(
+                    out DateTime nextRestart))
+            {
+                return;
+            }
+
+            if (_currentSettings is null)
+            {
+                MessageBox.Show(
+                    "Load the active PalWorldSettings.ini first.",
+                    "Settings Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!_currentSettings.RestApiEnabled ||
+                string.IsNullOrWhiteSpace(
+                    _currentSettings.AdminPassword))
+            {
+                MessageBox.Show(
+                    "Scheduled restarts require the Palworld REST API and an Admin Password.",
+                    "REST API Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            SavePreferencesFromControls();
+
+            _restartWarningsSent.Clear();
+            _nextRestartTime = nextRestart;
+            _restartScheduleTimer.Start();
+
+            UpdateRestartScheduleDisplay(true);
+
+            AddActivity(
+                $"Restart schedule enabled. Next restart: {_nextRestartTime:MMM d, yyyy h:mm:ss tt}.");
+        }
+
+        private void CancelRestartScheduleButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            _restartScheduleTimer.Stop();
+            _scheduledBackupTimer.Stop();
+            _nextRestartTime = null;
+            _restartWarningsSent.Clear();
+
+            UpdateRestartScheduleDisplay(false);
+
+            AddActivity(
+                "Scheduled restart cancelled.");
+        }
+
+        private async void RestartScheduleTimer_Tick(
+            object? sender,
+            EventArgs e)
+        {
+            if (!_nextRestartTime.HasValue ||
+                _scheduledRestartInProgress)
+            {
+                return;
+            }
+
+            TimeSpan remaining =
+                _nextRestartTime.Value -
+                DateTime.Now;
+
+            NextRestartText.Text =
+                remaining.TotalSeconds > 0
+                    ? FormatRestartCountdown(remaining)
+                    : "Restarting...";
+
+            await TrySendScheduledRestartWarningAsync(
+                remaining,
+                TimeSpan.FromMinutes(10),
+                "10m",
+                "Server restart in 10 minutes.");
+
+            await TrySendScheduledRestartWarningAsync(
+                remaining,
+                TimeSpan.FromMinutes(5),
+                "5m",
+                "Server restart in 5 minutes.");
+
+            await TrySendScheduledRestartWarningAsync(
+                remaining,
+                TimeSpan.FromMinutes(1),
+                "1m",
+                "Server restart in 1 minute.");
+
+            await TrySendScheduledRestartWarningAsync(
+                remaining,
+                TimeSpan.FromSeconds(10),
+                "10s",
+                "Server restart in 10 seconds.");
+
+            if (remaining.TotalSeconds <= 0)
+            {
+                await PerformScheduledRestartAsync();
+            }
+        }
+
+        private async Task TrySendScheduledRestartWarningAsync(
+            TimeSpan remaining,
+            TimeSpan threshold,
+            string key,
+            string message)
+        {
+            if (_restartWarningsSent.Contains(key) ||
+                remaining > threshold ||
+                remaining.TotalSeconds <= 0)
+            {
+                return;
+            }
+
+            _restartWarningsSent.Add(key);
+
+            if (!_serverProcessService.IsRunning)
+            {
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            try
+            {
+                await _restApiService.AnnounceAsync(
+                    restApiPort,
+                    adminPassword,
+                    message);
+
+                AddActivity(
+                    $"Scheduled restart warning sent: {message}");
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Scheduled restart warning failed: {ex.Message}");
+            }
+        }
+
+        private async Task PerformScheduledRestartAsync()
+        {
+            if (_scheduledRestartInProgress)
+            {
+                return;
+            }
+
+            _scheduledRestartInProgress = true;
+            _restartScheduleTimer.Stop();
+
+            try
+            {
+                if (!_serverProcessService.IsRunning)
+                {
+                    AddActivity(
+                        "Scheduled restart reached its time while the server was offline.");
+
+                    ScheduleNextRestart();
+                    return;
+                }
+
+                if (!TryGetRestApiConnectionSettings(
+                        out int restApiPort,
+                        out string adminPassword))
+                {
+                    ScheduleNextRestart();
+                    return;
+                }
+
+                AddActivity(
+                    "Scheduled restart started. Saving world.");
+
+                await _restApiService.SaveWorldAsync(
+                    restApiPort,
+                    adminPassword);
+
+                _lastWorldSaveTime = DateTime.Now;
+
+                LastWorldSaveText.Text =
+                    $"Last World Save: {_lastWorldSaveTime:MMM d, yyyy h:mm:ss tt}";
+
+                AddActivity(
+                    "Scheduled restart world save completed.");
+
+                await _restApiService.ShutdownAsync(
+                    restApiPort,
+                    adminPassword,
+                    10,
+                    "Server restarting in 10 seconds.");
+
+                bool exited =
+                    await WaitForServerToExitAsync(
+                        TimeSpan.FromSeconds(30));
+
+                if (!exited)
+                {
+                    AddActivity(
+                        "Scheduled restart cancelled because PalServer did not exit within 30 seconds.");
+
+                    MessageBox.Show(
+                        "The scheduled restart could not finish because PalServer did not exit within 30 seconds.\n\n" +
+                        "The app did not force stop the server.",
+                        "Scheduled Restart Incomplete",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+
+                    ScheduleNextRestart();
+                    return;
+                }
+
+                await Task.Delay(1500);
+
+                _serverProcessService.StartServer(
+                    _preferences.ServerExecutablePath,
+                    _preferences.LaunchArguments);
+
+                AddActivity(
+                    "Scheduled restart completed successfully.");
+
+                UpdateServerProcessDisplay();
+
+                ScheduleNextRestart();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Scheduled restart failed: {ex.Message}");
+
+                MessageBox.Show(
+                    "Scheduled restart failed.\n\n" +
+                    ex.Message,
+                    "Scheduled Restart Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                ScheduleNextRestart();
+            }
+            finally
+            {
+                _scheduledRestartInProgress = false;
+            }
+        }
+
+        private void ScheduleNextRestart()
+        {
+            _restartWarningsSent.Clear();
+
+            if (!TryCalculateNextRestartTime(
+                    out DateTime nextRestart))
+            {
+                _nextRestartTime = null;
+                UpdateRestartScheduleDisplay(false);
+                return;
+            }
+
+            _nextRestartTime = nextRestart;
+            _restartScheduleTimer.Start();
+
+            UpdateRestartScheduleDisplay(true);
+        }
+
+        private bool TryCalculateNextRestartTime(
+            out DateTime nextRestart)
+        {
+            nextRestart = default;
+
+            if (RestartScheduleComboBox.SelectedItem
+                is not ComboBoxItem selectedItem)
+            {
+                MessageBox.Show(
+                    "Select a restart schedule.",
+                    "Restart Schedule Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return false;
+            }
+
+            string tag =
+                selectedItem.Tag?.ToString() ?? "";
+
+            if (string.Equals(
+                    tag,
+                    "daily",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TimeSpan.TryParseExact(
+                        DailyRestartTimeTextBox.Text.Trim(),
+                        @"hh\:mm",
+                        CultureInfo.InvariantCulture,
+                        out TimeSpan dailyTime))
+                {
+                    MessageBox.Show(
+                        "Enter the daily restart time using 24-hour HH:mm format, for example 04:00 or 23:30.",
+                        "Invalid Restart Time",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+
+                    return false;
+                }
+
+                DateTime candidate =
+                    DateTime.Today.Add(
+                        dailyTime);
+
+                if (candidate <= DateTime.Now)
+                {
+                    candidate =
+                        candidate.AddDays(1);
+                }
+
+                nextRestart = candidate;
+                return true;
+            }
+
+            if (!int.TryParse(
+                    tag,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int intervalMinutes) ||
+                intervalMinutes <= 0)
+            {
+                MessageBox.Show(
+                    "The selected restart interval is invalid.",
+                    "Invalid Restart Schedule",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            nextRestart =
+                DateTime.Now.AddMinutes(
+                    intervalMinutes);
+
+            return true;
+        }
+
+        private void UpdateRestartScheduleDisplay(
+            bool enabled)
+        {
+            StartRestartScheduleButton.IsEnabled =
+                !enabled;
+
+            CancelRestartScheduleButton.IsEnabled =
+                enabled;
+
+            RestartScheduleComboBox.IsEnabled =
+                !enabled;
+
+            bool daily =
+                RestartScheduleComboBox.SelectedItem
+                    is ComboBoxItem item &&
+                string.Equals(
+                    item.Tag?.ToString(),
+                    "daily",
+                    StringComparison.OrdinalIgnoreCase);
+
+            DailyRestartTimeTextBox.IsEnabled =
+                !enabled &&
+                daily;
+
+            RestartScheduleStatusDot.Fill =
+                enabled
+                    ? GetBrush("SuccessColor")
+                    : GetBrush("WarningColor");
+
+            RestartScheduleStatusTitle.Text =
+                enabled
+                    ? "Scheduled restarts enabled"
+                    : "Scheduled restarts disabled";
+
+            if (enabled &&
+                _nextRestartTime.HasValue)
+            {
+                RestartScheduleStatusDescription.Text =
+                    "Palworld will save the world, shut down gracefully, and start again automatically.";
+
+                NextRestartText.Text =
+                    _nextRestartTime.Value.ToString(
+                        "MMM d h:mm tt",
+                        CultureInfo.CurrentCulture);
+            }
+            else
+            {
+                RestartScheduleStatusDescription.Text =
+                    "Choose a restart schedule and click Start Restart Schedule.";
+
+                NextRestartText.Text =
+                    "—";
+            }
+        }
+
+        private static string FormatRestartCountdown(
+            TimeSpan remaining)
+        {
+            if (remaining.TotalDays >= 1)
+            {
+                return $"{(int)remaining.TotalDays}d {remaining.Hours:00}:{remaining.Minutes:00}:{remaining.Seconds:00}";
+            }
+
+            return $"{Math.Max(0, (int)remaining.TotalHours):00}:{remaining.Minutes:00}:{remaining.Seconds:00}";
+        }
+
+        private void StartAutoSaveButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!TryGetSelectedAutoSaveInterval(
+                    out int intervalMinutes))
+            {
+                return;
+            }
+
+            if (_currentSettings is null)
+            {
+                MessageBox.Show(
+                    "Load the active PalWorldSettings.ini first.",
+                    "Settings Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!_currentSettings.RestApiEnabled ||
+                string.IsNullOrWhiteSpace(
+                    _currentSettings.AdminPassword))
+            {
+                MessageBox.Show(
+                    "Automatic saves require the Palworld REST API and an Admin Password.\n\n" +
+                    "Enable the REST API in Settings, save, and restart PalServer.",
+                    "REST API Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            _autoSaveTimer.Stop();
+            _restartScheduleTimer.Stop();
+
+            _autoSaveTimer.Interval =
+                TimeSpan.FromMinutes(
+                    intervalMinutes);
+
+            _nextAutoSaveTime =
+                DateTime.Now.AddMinutes(
+                    intervalMinutes);
+
+            _autoSaveTimer.Start();
+
+            UpdateAutoSaveDisplay(true);
+
+            AddActivity(
+                $"Automatic world saves enabled every {intervalMinutes} minutes.");
+        }
+
+        private void StopAutoSaveButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            _autoSaveTimer.Stop();
+            _nextAutoSaveTime = null;
+
+            UpdateAutoSaveDisplay(false);
+
+            AddActivity(
+                "Automatic world saves disabled.");
+        }
+
+        private async void AutoSaveTimer_Tick(
+            object? sender,
+            EventArgs e)
+        {
+            if (_autoSaveInProgress)
+            {
+                return;
+            }
+
+            if (!_serverProcessService.IsRunning)
+            {
+                AddActivity(
+                    "Automatic world save skipped because the server is offline.");
+
+                ScheduleNextAutoSave();
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                ScheduleNextAutoSave();
+                return;
+            }
+
+            _autoSaveInProgress = true;
+
+            try
+            {
+                await _restApiService.SaveWorldAsync(
+                    restApiPort,
+                    adminPassword);
+
+                _lastWorldSaveTime =
+                    DateTime.Now;
+
+                LastWorldSaveText.Text =
+                    $"Last World Save: {_lastWorldSaveTime:MMM d, yyyy h:mm:ss tt}";
+
+                AddActivity(
+                    $"Automatic world save completed at {_lastWorldSaveTime:h:mm:ss tt}.");
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Automatic world save failed: {ex.Message}");
+            }
+            finally
+            {
+                _autoSaveInProgress = false;
+                ScheduleNextAutoSave();
+            }
+        }
+
+        private void ScheduleNextAutoSave()
+        {
+            if (!_autoSaveTimer.IsEnabled)
+            {
+                return;
+            }
+
+            _nextAutoSaveTime =
+                DateTime.Now.Add(
+                    _autoSaveTimer.Interval);
+
+            UpdateAutoSaveDisplay(true);
+        }
+
+        private bool TryGetSelectedAutoSaveInterval(
+            out int intervalMinutes)
+        {
+            intervalMinutes = 0;
+
+            if (AutoSaveIntervalComboBox.SelectedItem
+                is not ComboBoxItem selectedItem ||
+                !int.TryParse(
+                    selectedItem.Tag?.ToString(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out intervalMinutes) ||
+                intervalMinutes <= 0)
+            {
+                MessageBox.Show(
+                    "Select a valid automatic save interval.",
+                    "Invalid Interval",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private void UpdateAutoSaveDisplay(
+            bool enabled)
+        {
+            StartAutoSaveButton.IsEnabled =
+                !enabled;
+
+            StopAutoSaveButton.IsEnabled =
+                enabled;
+
+            AutoSaveIntervalComboBox.IsEnabled =
+                !enabled;
+
+            AutoSaveStatusDot.Fill =
+                enabled
+                    ? GetBrush("SuccessColor")
+                    : GetBrush("WarningColor");
+
+            AutoSaveStatusTitle.Text =
+                enabled
+                    ? "Automatic saves enabled"
+                    : "Automatic saves disabled";
+
+            if (enabled &&
+                _nextAutoSaveTime.HasValue)
+            {
+                AutoSaveStatusDescription.Text =
+                    $"World saves will run every {_autoSaveTimer.Interval.TotalMinutes:0} minutes.";
+
+                NextAutoSaveText.Text =
+                    _nextAutoSaveTime.Value.ToString(
+                        "h:mm:ss tt",
+                        CultureInfo.CurrentCulture);
+            }
+            else
+            {
+                AutoSaveStatusDescription.Text =
+                    "Choose an interval and click Start Auto Save.";
+
+                NextAutoSaveText.Text =
+                    "—";
+            }
+        }
+
         private void MainWindow_Closed(object? sender, EventArgs e)
         {
             _serverStatusTimer.Stop();
+            _autoSaveTimer.Stop();
             _serverProcessService.Dispose();
             _restApiService.Dispose();
         }
@@ -391,6 +1613,7 @@ namespace PalWorldServerManager
             SaveButton.IsEnabled = true;
             StatusTextBlock.Text = $"Loaded: {_settingsFilePath}";
             RefreshBackupList();
+            _ = RefreshLiveMetricsAsync();
             AddActivity($"Loaded settings: {filePath}");
         }
 
@@ -596,6 +1819,63 @@ namespace PalWorldServerManager
             AddActivity("Server preferences saved.");
         }
 
+        private async void SaveWorldButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!_serverProcessService.IsRunning)
+            {
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            SaveWorldButton.IsEnabled = false;
+
+            try
+            {
+                await _restApiService.SaveWorldAsync(
+                    restApiPort,
+                    adminPassword);
+
+                _lastWorldSaveTime = DateTime.Now;
+
+                LastWorldSaveText.Text =
+                    $"Last World Save: {_lastWorldSaveTime:MMM d, yyyy h:mm:ss tt}";
+
+                AddActivity(
+                    $"World saved manually at {_lastWorldSaveTime:h:mm:ss tt}.");
+
+                MessageBox.Show(
+                    "World saved successfully.",
+                    "World Saved",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Manual world save failed: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not save the world.\n\n" +
+                    ex.Message,
+                    "Save World Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                SaveWorldButton.IsEnabled =
+                    _serverProcessService.IsRunning;
+            }
+        }
+
         private void StartServerButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -604,6 +1884,7 @@ namespace PalWorldServerManager
                 _serverProcessService.StartServer(_preferences.ServerExecutablePath, _preferences.LaunchArguments);
                 AddActivity("Palworld server started.");
                 UpdateServerProcessDisplay();
+                _ = RefreshLiveMetricsAsync();
             }
             catch (Exception ex)
             {
@@ -793,6 +2074,7 @@ namespace PalWorldServerManager
                 AddActivity("Palworld server restarted successfully.");
 
                 UpdateServerProcessDisplay();
+                _ = RefreshLiveMetricsAsync();
             }
             catch (Exception ex)
             {
@@ -903,6 +2185,14 @@ namespace PalWorldServerManager
         private void ServerStatusTimer_Tick(object? sender, EventArgs e)
         {
             UpdateServerProcessDisplay();
+
+            _serverStatusTickCount++;
+
+            if (_serverStatusTickCount >= 5)
+            {
+                _serverStatusTickCount = 0;
+                _ = RefreshLiveMetricsAsync();
+            }
         }
 
         private void UpdateServerProcessDisplay()
@@ -924,6 +2214,7 @@ namespace PalWorldServerManager
             StopServerButton.IsEnabled = running;
             RestartServerButton.IsEnabled = running;
             ForceStopServerButton.IsEnabled = running;
+            SaveWorldButton.IsEnabled = running;
         }
 
         private static string FormatMemory(long bytes)

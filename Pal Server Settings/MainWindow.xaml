@@ -428,11 +428,17 @@
                                 </StackPanel>
                             </Grid>
 
-                            <!-- Server runtime status -->
+                            <!-- Server runtime status and primary controls -->
                             <Border Style="{StaticResource CardStyle}"
                                     Margin="0,0,0,18">
 
                                 <Grid>
+
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
@@ -446,24 +452,93 @@
                                              VerticalAlignment="Center"
                                              Margin="0,0,14,0"/>
 
-                                    <StackPanel Grid.Column="1">
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center">
+
                                         <TextBlock x:Name="ServerProcessStatusTitle"
                                                    Text="Server status unknown"
                                                    FontSize="19"
                                                    FontWeight="SemiBold"/>
 
-                                        <TextBlock x:Name="ServerProcessStatusDescription"
-                                                   Text="Select PalServer.exe to begin monitoring and control."
-                                                   Foreground="{StaticResource MutedTextColor}"
-                                                   TextWrapping="Wrap"
-                                                   Margin="0,5,0,0"/>
+                                        <WrapPanel Margin="0,5,0,0">
+
+                                            <TextBlock x:Name="ServerProcessStatusDescription"
+                                                       Text="Select PalServer.exe to begin monitoring and control."
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       TextWrapping="Wrap"/>
+
+                                            <TextBlock Text="   •   "
+                                                       Foreground="{StaticResource MutedTextColor}"/>
+
+                                            <TextBlock x:Name="ServerProcessIdText"
+                                                       Text="PID: —"
+                                                       Foreground="{StaticResource MutedTextColor}"/>
+
+                                        </WrapPanel>
+
                                     </StackPanel>
 
-                                    <TextBlock x:Name="ServerProcessIdText"
-                                               Grid.Column="2"
-                                               Text="PID: —"
+                                    <WrapPanel Grid.Column="2"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               Margin="18,0,0,0">
+
+                                        <Button x:Name="StartServerButton"
+                                                Content="Start Server"
+                                                Width="108"
+                                                Height="38"
+                                                Margin="0,0,8,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="StopServerButton"
+                                                Content="Stop Server"
+                                                Width="108"
+                                                Height="38"
+                                                Margin="0,0,8,0"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="RestartServerButton"
+                                                Content="Restart"
+                                                Width="95"
+                                                Height="38"
+                                                Margin="0,0,8,0"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="ForceStopServerButton"
+                                                Content="Force Stop"
+                                                Width="100"
+                                                Height="38"
+                                                Margin="0,0,8,0"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="SaveWorldButton"
+                                                Content="Save World"
+                                                Width="105"
+                                                Height="38"
+                                                Margin="0,0,8,0"
+                                                IsEnabled="False"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="SaveServerPreferencesButton"
+                                                Content="Save Preferences"
+                                                Width="130"
+                                                Height="38"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </WrapPanel>
+
+                                    <TextBlock x:Name="LastWorldSaveText"
+                                               Grid.Row="1"
+                                               Grid.Column="1"
+                                               Grid.ColumnSpan="2"
+                                               Text="Last World Save: —"
                                                Foreground="{StaticResource MutedTextColor}"
-                                               VerticalAlignment="Center"/>
+                                               FontSize="12"
+                                               Margin="0,8,0,0"/>
+
                                 </Grid>
                             </Border>
 
@@ -517,121 +592,151 @@
                                 </Border>
                             </Grid>
 
-                            <!-- Server controls -->
+
+                            <!-- Live REST API metrics -->
                             <Border Style="{StaticResource CardStyle}"
                                     Margin="0,0,0,18">
 
                                 <StackPanel>
-                                    <TextBlock Text="Server Controls"
-                                               FontSize="19"
-                                               FontWeight="SemiBold"/>
 
-                                    <TextBlock Text="Choose the PalServer launcher and configure the command-line arguments used when starting it."
-                                               Foreground="{StaticResource MutedTextColor}"
-                                               TextWrapping="Wrap"
-                                               Margin="0,6,0,18"/>
+                                    <Grid Margin="0,0,0,14">
 
-                                    <TextBlock Text="PalServer executable"/>
-
-                                    <Grid Margin="0,6,0,16">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBox x:Name="ServerExecutablePathTextBox"
-                                                 IsReadOnly="True"
-                                                 Margin="0,0,10,0"/>
+                                        <StackPanel>
 
-                                        <Button x:Name="BrowseServerExecutableButton"
+                                            <TextBlock Text="Live Server Metrics"
+                                                       FontSize="19"
+                                                       FontWeight="SemiBold"/>
+
+                                            <TextBlock x:Name="LiveMetricsStatusText"
+                                                       Text="Metrics unavailable until the server is running and REST API is connected."
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,5,0,0"/>
+
+                                        </StackPanel>
+
+                                        <Button x:Name="RefreshMetricsButton"
                                                 Grid.Column="1"
-                                                Content="Browse..."
-                                                Width="110"
+                                                Content="Refresh"
+                                                Width="100"
                                                 Height="38"
                                                 Style="{StaticResource SecondaryButtonStyle}"/>
+
                                     </Grid>
 
-                                    <TextBlock Text="Launch arguments"/>
+                                    <Grid>
 
-                                    <TextBox x:Name="ServerLaunchArgumentsTextBox"
-                                             Margin="0,6,0,16"/>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
 
-                                    <CheckBox x:Name="AttachToRunningServerCheckBox"
-                                              Content="Attach to an already-running Palworld server when the app starts"
-                                              Margin="0,0,0,18"/>
+                                        <Border Grid.Column="0"
+                                                Background="#99111827"
+                                                BorderBrush="{StaticResource BorderColor}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14"
+                                                Margin="0,0,10,0">
+                                            <StackPanel>
+                                                <TextBlock Text="Players"
+                                                           Foreground="{StaticResource MutedTextColor}"
+                                                           FontSize="12"/>
+                                                <TextBlock x:Name="LivePlayersText"
+                                                           Text="—"
+                                                           FontSize="21"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,7,0,0"/>
+                                            </StackPanel>
+                                        </Border>
 
-                                    <WrapPanel>
-                                        <Button x:Name="StartServerButton"
-                                                Content="Start Server"
-                                                Width="130"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                Style="{StaticResource PrimaryButtonStyle}"/>
+                                        <Border Grid.Column="1"
+                                                Background="#99111827"
+                                                BorderBrush="{StaticResource BorderColor}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14"
+                                                Margin="0,0,10,0">
+                                            <StackPanel>
+                                                <TextBlock Text="Server FPS"
+                                                           Foreground="{StaticResource MutedTextColor}"
+                                                           FontSize="12"/>
+                                                <TextBlock x:Name="LiveServerFpsText"
+                                                           Text="—"
+                                                           FontSize="21"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,7,0,0"/>
+                                            </StackPanel>
+                                        </Border>
 
-                                        <Button x:Name="StopServerButton"
-                                                Content="Stop Server"
-                                                Width="130"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                IsEnabled="False"
-                                                Style="{StaticResource SecondaryButtonStyle}"/>
+                                        <Border Grid.Column="2"
+                                                Background="#99111827"
+                                                BorderBrush="{StaticResource BorderColor}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14"
+                                                Margin="0,0,10,0">
+                                            <StackPanel>
+                                                <TextBlock Text="World Uptime"
+                                                           Foreground="{StaticResource MutedTextColor}"
+                                                           FontSize="12"/>
+                                                <TextBlock x:Name="LiveWorldUptimeText"
+                                                           Text="—"
+                                                           FontSize="21"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,7,0,0"/>
+                                            </StackPanel>
+                                        </Border>
 
-                                        <Button x:Name="RestartServerButton"
-                                                Content="Restart Server"
-                                                Width="135"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                IsEnabled="False"
-                                                Style="{StaticResource SecondaryButtonStyle}"/>
+                                        <Border Grid.Column="3"
+                                                Background="#99111827"
+                                                BorderBrush="{StaticResource BorderColor}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14"
+                                                Margin="0,0,10,0">
+                                            <StackPanel>
+                                                <TextBlock Text="World Day"
+                                                           Foreground="{StaticResource MutedTextColor}"
+                                                           FontSize="12"/>
+                                                <TextBlock x:Name="LiveWorldDayText"
+                                                           Text="—"
+                                                           FontSize="21"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,7,0,0"/>
+                                            </StackPanel>
+                                        </Border>
 
-                                        <Button x:Name="ForceStopServerButton"
-                                                Content="Force Stop"
-                                                Width="125"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                IsEnabled="False"
-                                                Style="{StaticResource SecondaryButtonStyle}"/>
+                                        <Border Grid.Column="4"
+                                                Background="#99111827"
+                                                BorderBrush="{StaticResource BorderColor}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14">
+                                            <StackPanel>
+                                                <TextBlock Text="Base Camps"
+                                                           Foreground="{StaticResource MutedTextColor}"
+                                                           FontSize="12"/>
+                                                <TextBlock x:Name="LiveBaseCountText"
+                                                           Text="—"
+                                                           FontSize="21"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,7,0,0"/>
+                                            </StackPanel>
+                                        </Border>
 
-                                        <Button x:Name="SaveServerPreferencesButton"
-                                                Content="Save Preferences"
-                                                Width="145"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                Style="{StaticResource SecondaryButtonStyle}"/>
-                                    </WrapPanel>
+                                    </Grid>
+
                                 </StackPanel>
-                            </Border>
 
-                            <!-- Loaded configuration status -->
-                            <Border Style="{StaticResource CardStyle}"
-                                    Margin="0,0,0,18">
-
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Ellipse x:Name="DashboardStatusDot"
-                                             Width="14"
-                                             Height="14"
-                                             Fill="{StaticResource WarningColor}"
-                                             VerticalAlignment="Center"
-                                             Margin="0,0,14,0"/>
-
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock x:Name="DashboardStatusTitle"
-                                                   Text="No settings file loaded"
-                                                   FontSize="18"
-                                                   FontWeight="SemiBold"/>
-
-                                        <TextBlock x:Name="DashboardStatusDescription"
-                                                   Text="Click Load Settings and select PalWorldSettings.ini."
-                                                   Foreground="{StaticResource MutedTextColor}"
-                                                   TextWrapping="Wrap"
-                                                   Margin="0,5,0,0"/>
-                                    </StackPanel>
-                                </Grid>
                             </Border>
 
                             <!-- Configuration metrics row 1 -->
@@ -749,6 +854,85 @@
                                     </StackPanel>
                                 </Border>
                             </Grid>
+
+                            <!-- Loaded configuration status -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,18">
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="DashboardStatusDot"
+                                             Width="14"
+                                             Height="14"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,14,0"/>
+
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock x:Name="DashboardStatusTitle"
+                                                   Text="No settings file loaded"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="DashboardStatusDescription"
+                                                   Text="Click Load Settings and select PalWorldSettings.ini."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Server controls -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,18">
+
+                                <StackPanel>
+                                    <TextBlock Text="Server Controls"
+                                               FontSize="19"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Text="Choose the PalServer launcher and configure the command-line arguments used when starting it."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,6,0,18"/>
+
+                                    <TextBlock Text="PalServer executable"/>
+
+                                    <Grid Margin="0,6,0,16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBox x:Name="ServerExecutablePathTextBox"
+                                                 IsReadOnly="True"
+                                                 Margin="0,0,10,0"/>
+
+                                        <Button x:Name="BrowseServerExecutableButton"
+                                                Grid.Column="1"
+                                                Content="Browse..."
+                                                Width="110"
+                                                Height="38"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+                                    </Grid>
+
+                                    <TextBlock Text="Launch arguments"/>
+
+                                    <TextBox x:Name="ServerLaunchArgumentsTextBox"
+                                             Margin="0,6,0,16"/>
+
+                                    <CheckBox x:Name="AttachToRunningServerCheckBox"
+                                              Content="Attach to an already-running Palworld server when the app starts"
+                                              Margin="0,0,0,18"/>
+
+
+                                </StackPanel>
+                            </Border>
 
                         </StackPanel>
 
@@ -1122,6 +1306,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <!-- Players header -->
@@ -1277,6 +1463,100 @@
                                                Margin="0,8,0,0"/>
 
                                 </StackPanel>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Player administration -->
+                        <Border Grid.Row="3"
+                                Style="{StaticResource CardStyle}"
+                                Margin="0,14,0,0">
+
+                            <Grid>
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Player Administration"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock x:Name="SelectedPlayerText"
+                                               Text="Select a player above to enable administration controls."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0"/>
+
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+
+                                    <Button x:Name="KickPlayerButton"
+                                            Content="Kick Player"
+                                            Width="120"
+                                            Height="40"
+                                            Margin="0,0,10,0"
+                                            IsEnabled="False"
+                                            Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    <Button x:Name="BanPlayerButton"
+                                            Content="Ban Player"
+                                            Width="120"
+                                            Height="40"
+                                            IsEnabled="False"
+                                            Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Unban player -->
+                        <Border Grid.Row="4"
+                                Style="{StaticResource CardStyle}"
+                                Margin="0,14,0,0">
+
+                            <Grid>
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Unban Player"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Text="Enter the banned player's User ID, for example steam_00000000000000000."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,10"/>
+
+                                    <TextBox x:Name="UnbanUserIdTextBox"
+                                             MinHeight="40"
+                                             VerticalContentAlignment="Center"
+                                             ToolTip="Enter the banned player's User ID"/>
+
+                                </StackPanel>
+
+                                <Button x:Name="UnbanPlayerButton"
+                                        Grid.Column="1"
+                                        Content="Unban Player"
+                                        Width="125"
+                                        Height="40"
+                                        Margin="14,34,0,0"
+                                        VerticalAlignment="Top"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
 
                             </Grid>
 
@@ -1649,26 +1929,429 @@
                 <!-- SCHEDULER -->
                 <TabItem>
 
-                    <Grid Margin="28">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
 
-                        <StackPanel VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    MaxWidth="520">
+                        <StackPanel Margin="28">
 
-                            <TextBlock Text="Scheduler"
-                                       FontSize="29"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
+                            <!-- Scheduler header -->
+                            <StackPanel Margin="0,0,0,18">
 
-                            <TextBlock Text="Scheduled restarts, saves, and backups will be added in a later phase."
-                                       Foreground="{StaticResource MutedTextColor}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       Margin="0,12,0,0"/>
+                                <TextBlock Text="Scheduler"
+                                           FontSize="29"
+                                           FontWeight="SemiBold"/>
+
+                                <TextBlock Text="Automate world saves and safe server restarts."
+                                           Foreground="{StaticResource MutedTextColor}"
+                                           Margin="0,6,0,0"/>
+
+                            </StackPanel>
+
+                            <!-- Auto save status -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,14">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="AutoSaveStatusDot"
+                                             Width="12"
+                                             Height="12"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,12,0"/>
+
+                                    <StackPanel Grid.Column="1">
+
+                                        <TextBlock x:Name="AutoSaveStatusTitle"
+                                                   Text="Automatic saves disabled"
+                                                   FontSize="17"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="AutoSaveStatusDescription"
+                                                   Text="Choose an interval and click Start Auto Save."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                Margin="20,0,0,0">
+
+                                        <TextBlock Text="NEXT SAVE"
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   FontSize="11"
+                                                   HorizontalAlignment="Right"/>
+
+                                        <TextBlock x:Name="NextAutoSaveText"
+                                                   Text="—"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"
+                                                   Margin="0,3,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <!-- Auto save controls -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,18">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Automatic World Saves"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock Text="Save Interval"
+                                                   Margin="0,16,0,6"/>
+
+                                        <ComboBox x:Name="AutoSaveIntervalComboBox"
+                                                  Width="220"
+                                                  HorizontalAlignment="Left"
+                                                  SelectedIndex="2">
+
+                                            <ComboBoxItem Content="5 minutes"
+                                                          Tag="5"/>
+
+                                            <ComboBoxItem Content="10 minutes"
+                                                          Tag="10"/>
+
+                                            <ComboBoxItem Content="15 minutes"
+                                                          Tag="15"/>
+
+                                            <ComboBoxItem Content="30 minutes"
+                                                          Tag="30"/>
+
+                                            <ComboBoxItem Content="60 minutes"
+                                                          Tag="60"/>
+
+                                        </ComboBox>
+
+                                        <TextBlock Text="Automatic saves use Palworld's REST API and are only attempted while the server is running."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,12,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="24,0,0,0">
+
+                                        <Button x:Name="StartAutoSaveButton"
+                                                Content="Start Auto Save"
+                                                Width="145"
+                                                Height="42"
+                                                Margin="0,0,10,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="StopAutoSaveButton"
+                                                Content="Stop Auto Save"
+                                                Width="145"
+                                                Height="42"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <!-- Restart status -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,14">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="RestartScheduleStatusDot"
+                                             Width="12"
+                                             Height="12"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,12,0"/>
+
+                                    <StackPanel Grid.Column="1">
+
+                                        <TextBlock x:Name="RestartScheduleStatusTitle"
+                                                   Text="Scheduled restarts disabled"
+                                                   FontSize="17"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="RestartScheduleStatusDescription"
+                                                   Text="Choose a restart schedule and click Start Restart Schedule."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                Margin="20,0,0,0">
+
+                                        <TextBlock Text="NEXT RESTART"
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   FontSize="11"
+                                                   HorizontalAlignment="Right"/>
+
+                                        <TextBlock x:Name="NextRestartText"
+                                                   Text="—"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"
+                                                   Margin="0,3,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <!-- Restart controls -->
+                            <Border Style="{StaticResource CardStyle}">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Scheduled Restarts"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock Text="Restart Schedule"
+                                                   Margin="0,16,0,6"/>
+
+                                        <ComboBox x:Name="RestartScheduleComboBox"
+                                                  Width="260"
+                                                  HorizontalAlignment="Left"
+                                                  SelectedIndex="1">
+
+                                            <ComboBoxItem Content="5 minutes (test)"
+                                                          Tag="5"/>
+
+                                            <ComboBoxItem Content="Every 6 hours"
+                                                          Tag="360"/>
+
+                                            <ComboBoxItem Content="Every 12 hours"
+                                                          Tag="720"/>
+
+                                            <ComboBoxItem Content="Every 24 hours"
+                                                          Tag="1440"/>
+
+                                            <ComboBoxItem Content="Daily at specific time"
+                                                          Tag="daily"/>
+
+                                        </ComboBox>
+
+                                        <TextBlock Text="Daily Restart Time (24-hour HH:mm)"
+                                                   Margin="0,14,0,6"/>
+
+                                        <TextBox x:Name="DailyRestartTimeTextBox"
+                                                 Width="140"
+                                                 HorizontalAlignment="Left"
+                                                 Text="04:00"
+                                                 IsEnabled="False"/>
+
+                                        <TextBlock Text="Players receive warnings at 10 minutes, 5 minutes, 1 minute, and 10 seconds before restart when enough time remains. The world is saved before a graceful REST API shutdown."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="650"
+                                                   Margin="0,12,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="24,0,0,0">
+
+                                        <Button x:Name="StartRestartScheduleButton"
+                                                Content="Start Restart Schedule"
+                                                Width="175"
+                                                Height="42"
+                                                Margin="0,0,10,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="CancelRestartScheduleButton"
+                                                Content="Cancel Schedule"
+                                                Width="150"
+                                                Height="42"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+
+                            <!-- Scheduled configuration backup status -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,18,0,14">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="ScheduledBackupStatusDot"
+                                             Width="12"
+                                             Height="12"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,12,0"/>
+
+                                    <StackPanel Grid.Column="1">
+
+                                        <TextBlock x:Name="ScheduledBackupStatusTitle"
+                                                   Text="Scheduled configuration backups disabled"
+                                                   FontSize="17"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="ScheduledBackupStatusDescription"
+                                                   Text="Choose an interval and click Start Backup Schedule."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                Margin="20,0,0,0">
+
+                                        <TextBlock Text="NEXT BACKUP"
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   FontSize="11"
+                                                   HorizontalAlignment="Right"/>
+
+                                        <TextBlock x:Name="NextScheduledBackupText"
+                                                   Text="—"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"
+                                                   Margin="0,3,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <!-- Scheduled configuration backup controls -->
+                            <Border Style="{StaticResource CardStyle}">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Scheduled Configuration Backups"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock Text="Backup Interval"
+                                                   Margin="0,16,0,6"/>
+
+                                        <ComboBox x:Name="ScheduledBackupIntervalComboBox"
+                                                  Width="240"
+                                                  HorizontalAlignment="Left"
+                                                  SelectedIndex="2">
+
+                                            <ComboBoxItem Content="15 minutes"
+                                                          Tag="15"/>
+
+                                            <ComboBoxItem Content="30 minutes"
+                                                          Tag="30"/>
+
+                                            <ComboBoxItem Content="60 minutes"
+                                                          Tag="60"/>
+
+                                            <ComboBoxItem Content="Every 6 hours"
+                                                          Tag="360"/>
+
+                                            <ComboBoxItem Content="Every 12 hours"
+                                                          Tag="720"/>
+
+                                            <ComboBoxItem Content="Every 24 hours"
+                                                          Tag="1440"/>
+
+                                        </ComboBox>
+
+                                        <TextBlock Text="Creates a timestamped backup of the currently loaded PalWorldSettings.ini. These backups appear on the Backups page."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="650"
+                                                   Margin="0,12,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="24,0,0,0">
+
+                                        <Button x:Name="StartScheduledBackupButton"
+                                                Content="Start Backup Schedule"
+                                                Width="175"
+                                                Height="42"
+                                                Margin="0,0,10,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="StopScheduledBackupButton"
+                                                Content="Stop Backup Schedule"
+                                                Width="175"
+                                                Height="42"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
 
                         </StackPanel>
 
-                    </Grid>
+                    </ScrollViewer>
                 </TabItem>
 
                 <!-- MODS -->
