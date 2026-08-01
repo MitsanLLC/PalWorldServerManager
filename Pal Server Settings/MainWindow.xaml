@@ -1744,186 +1744,326 @@
                 <!-- BACKUPS -->
                 <TabItem>
 
-                    <Grid Margin="28">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
 
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                        <StackPanel Margin="28">
 
-                        <!-- Backups header -->
-                        <Grid Grid.Row="0"
-                              Margin="0,0,0,18">
+                            <TextBlock Text="Backups"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"/>
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Manage both configuration backups and complete Palworld world-save backups."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       Margin="0,6,0,18"/>
 
-                            <StackPanel>
+                            <!-- WORLD SAVE BACKUPS -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,14">
 
-                                <TextBlock Text="Backups"
-                                           FontSize="29"
-                                           FontWeight="SemiBold"/>
+                                <Grid>
 
-                                <TextBlock Text="Review, restore, and delete configuration backups for the loaded settings file."
-                                           Foreground="{StaticResource MutedTextColor}"
-                                           Margin="0,6,0,0"/>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-                            </StackPanel>
+                                    <StackPanel>
 
-                            <StackPanel Grid.Column="1"
-                                        Orientation="Horizontal">
+                                        <TextBlock Text="World Save Backups"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"/>
 
-                                <Button x:Name="RefreshBackupsButton"
-                                        Content="Refresh"
-                                        Width="110"
+                                        <TextBlock x:Name="WorldBackupStatusText"
+                                                   Text="Load the active PalWorldSettings.ini to manage full world backups."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0"/>
+
+                                    </StackPanel>
+
+                                    <WrapPanel Grid.Column="1"
+                                               Margin="20,0,0,0"
+                                               VerticalAlignment="Center">
+
+                                        <Button x:Name="BackupWorldNowButton"
+                                                Content="Backup World Now"
+                                                Width="145"
+                                                Height="40"
+                                                Margin="0,0,8,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="RefreshWorldBackupsButton"
+                                                Content="Refresh"
+                                                Width="95"
+                                                Height="40"
+                                                Margin="0,0,8,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="OpenWorldSaveFolderButton"
+                                                Content="Open Save Folder"
+                                                Width="135"
+                                                Height="40"
+                                                Margin="0,0,8,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="OpenWorldBackupFolderButton"
+                                                Content="Open Backup Folder"
+                                                Width="145"
+                                                Height="40"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </WrapPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <Border Background="#CC08111F"
+                                    BorderBrush="{StaticResource BorderColor}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="10"
+                                    MinHeight="230"
+                                    Margin="0,0,0,14">
+
+                                <Grid>
+
+                                    <ListView x:Name="WorldBackupListView"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              Foreground="{StaticResource TextColor}"
+                                              HorizontalContentAlignment="Stretch">
+
+                                        <ListView.View>
+                                            <GridView>
+
+                                                <GridViewColumn Header="Created"
+                                                                Width="210"
+                                                                DisplayMemberBinding="{Binding CreatedAtDisplay}"/>
+
+                                                <GridViewColumn Header="Backup File"
+                                                                Width="460"
+                                                                DisplayMemberBinding="{Binding FileName}"/>
+
+                                                <GridViewColumn Header="Size"
+                                                                Width="120"
+                                                                DisplayMemberBinding="{Binding SizeDisplay}"/>
+
+                                            </GridView>
+                                        </ListView.View>
+
+                                    </ListView>
+
+                                    <StackPanel x:Name="NoWorldBackupsPanel"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
+
+                                        <TextBlock Text="No world backups found"
+                                                   FontSize="19"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"/>
+
+                                        <TextBlock x:Name="NoWorldBackupsText"
+                                                   Text="Click Backup World Now to create the first full save-data backup."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="500"
+                                                   Margin="0,8,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,24">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock x:Name="SelectedWorldBackupText"
+                                               Text="Select a world backup to restore or delete."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"/>
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                Margin="20,0,0,0">
+
+                                        <Button x:Name="RestoreWorldBackupButton"
+                                                Content="Restore Selected"
+                                                Width="145"
+                                                Height="40"
+                                                Margin="0,0,10,0"
+                                                IsEnabled="False"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="DeleteWorldBackupButton"
+                                                Content="Delete Selected"
+                                                Width="145"
+                                                Height="40"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <!-- CONFIGURATION BACKUPS -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,14">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="BackupStatusDot"
+                                             Width="12"
+                                             Height="12"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,12,0"/>
+
+                                    <StackPanel Grid.Column="1">
+
+                                        <TextBlock Text="Configuration Backups"
+                                                   FontSize="20"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="BackupStatusTitleText"
+                                                   Text="No settings file loaded"
+                                                   FontSize="15"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,6,0,0"/>
+
+                                        <TextBlock x:Name="BackupStatusDescriptionText"
+                                                   Text="Load PalWorldSettings.ini before viewing configuration backups."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="20,0,0,0">
+
+                                        <Button x:Name="RefreshBackupsButton"
+                                                Content="Refresh"
+                                                Width="95"
+                                                Height="40"
+                                                Margin="0,0,10,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="OpenBackupFolderButton"
+                                                Content="Open Folder"
+                                                Width="115"
+                                                Height="40"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <Border Background="#CC08111F"
+                                    BorderBrush="{StaticResource BorderColor}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="10"
+                                    MinHeight="220">
+
+                                <Grid>
+
+                                    <ListView x:Name="BackupListView"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              Foreground="{StaticResource TextColor}"
+                                              HorizontalContentAlignment="Stretch">
+
+                                        <ListView.View>
+                                            <GridView>
+
+                                                <GridViewColumn Header="Created"
+                                                                Width="210"
+                                                                DisplayMemberBinding="{Binding CreatedAtDisplay}"/>
+
+                                                <GridViewColumn Header="Backup File"
+                                                                Width="460"
+                                                                DisplayMemberBinding="{Binding FileName}"/>
+
+                                                <GridViewColumn Header="Size"
+                                                                Width="120"
+                                                                DisplayMemberBinding="{Binding SizeDisplay}"/>
+
+                                            </GridView>
+                                        </ListView.View>
+
+                                    </ListView>
+
+                                    <StackPanel x:Name="NoBackupsPanel"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
+
+                                        <TextBlock Text="No configuration backups found"
+                                                   FontSize="19"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"/>
+
+                                        <TextBlock x:Name="NoBackupsText"
+                                                   Text="Save your settings to create a timestamped configuration backup."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="500"
+                                                   Margin="0,8,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        Margin="0,14,0,0">
+
+                                <Button x:Name="RestoreBackupButton"
+                                        Content="Restore Selected"
+                                        Width="145"
                                         Height="40"
                                         Margin="0,0,10,0"
-                                        Style="{StaticResource SecondaryButtonStyle}"/>
-
-                                <Button x:Name="OpenBackupFolderButton"
-                                        Content="Open Folder"
-                                        Width="125"
-                                        Height="40"
+                                        IsEnabled="False"
                                         Style="{StaticResource PrimaryButtonStyle}"/>
-
-                            </StackPanel>
-
-                        </Grid>
-
-                        <!-- Backup status -->
-                        <Border Grid.Row="1"
-                                Style="{StaticResource CardStyle}"
-                                Margin="0,0,0,18">
-
-                            <Grid>
-
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <Ellipse x:Name="BackupStatusDot"
-                                         Width="14"
-                                         Height="14"
-                                         Fill="{StaticResource WarningColor}"
-                                         VerticalAlignment="Center"
-                                         Margin="0,0,14,0"/>
-
-                                <StackPanel Grid.Column="1">
-
-                                    <TextBlock x:Name="BackupStatusTitleText"
-                                               Text="No settings file loaded"
-                                               FontSize="18"
-                                               FontWeight="SemiBold"/>
-
-                                    <TextBlock x:Name="BackupStatusDescriptionText"
-                                               Text="Load PalWorldSettings.ini before viewing backups."
-                                               Foreground="{StaticResource MutedTextColor}"
-                                               TextWrapping="Wrap"
-                                               Margin="0,5,0,0"/>
-
-                                </StackPanel>
-
-                            </Grid>
-
-                        </Border>
-
-                        <!-- Backup list -->
-                        <Border Grid.Row="2"
-                                Style="{StaticResource CardStyle}">
-
-                            <Grid>
-
-                                <ListView x:Name="BackupListView"
-                                          Background="Transparent"
-                                          BorderThickness="0"
-                                          Foreground="{StaticResource TextColor}"
-                                          HorizontalContentAlignment="Stretch">
-
-                                    <ListView.View>
-                                        <GridView>
-
-                                            <GridViewColumn Header="Created"
-                                                            Width="190"
-                                                            DisplayMemberBinding="{Binding CreatedAtDisplay}"/>
-
-                                            <GridViewColumn Header="File Name"
-                                                            Width="430"
-                                                            DisplayMemberBinding="{Binding FileName}"/>
-
-                                            <GridViewColumn Header="Size"
-                                                            Width="110"
-                                                            DisplayMemberBinding="{Binding SizeDisplay}"/>
-
-                                        </GridView>
-                                    </ListView.View>
-
-                                </ListView>
-
-                                <StackPanel x:Name="NoBackupsPanel"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            MaxWidth="520">
-
-                                    <TextBlock Text="No backups found"
-                                               FontSize="21"
-                                               FontWeight="SemiBold"
-                                               TextAlignment="Center"/>
-
-                                    <TextBlock x:Name="NoBackupsText"
-                                               Text="Save the settings file to create your first timestamped backup."
-                                               Foreground="{StaticResource MutedTextColor}"
-                                               TextAlignment="Center"
-                                               TextWrapping="Wrap"
-                                               Margin="0,8,0,0"/>
-
-                                </StackPanel>
-
-                            </Grid>
-
-                        </Border>
-
-                        <!-- Backup actions -->
-                        <Grid Grid.Row="3"
-                              Margin="0,18,0,0">
-
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Text="Restoring creates a safety backup of the current file first."
-                                       Foreground="{StaticResource MutedTextColor}"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"/>
-
-                            <StackPanel Grid.Column="1"
-                                        Orientation="Horizontal">
 
                                 <Button x:Name="DeleteBackupButton"
                                         Content="Delete Selected"
                                         Width="145"
-                                        Height="42"
-                                        Margin="0,0,10,0"
+                                        Height="40"
                                         IsEnabled="False"
                                         Style="{StaticResource SecondaryButtonStyle}"/>
 
-                                <Button x:Name="RestoreBackupButton"
-                                        Content="Restore Selected"
-                                        Width="155"
-                                        Height="42"
-                                        IsEnabled="False"
-                                        Style="{StaticResource PrimaryButtonStyle}"/>
-
                             </StackPanel>
 
-                        </Grid>
+                        </StackPanel>
 
-                    </Grid>
+                    </ScrollViewer>
+
                 </TabItem>
 
                 <!-- SCHEDULER -->
@@ -2339,6 +2479,140 @@
                                         <Button x:Name="StopScheduledBackupButton"
                                                 Content="Stop Backup Schedule"
                                                 Width="175"
+                                                Height="42"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+
+                            <!-- Scheduled world backup status -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,18,0,14">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse x:Name="ScheduledWorldBackupStatusDot"
+                                             Width="12"
+                                             Height="12"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,12,0"/>
+
+                                    <StackPanel Grid.Column="1">
+
+                                        <TextBlock x:Name="ScheduledWorldBackupStatusTitle"
+                                                   Text="Scheduled world backups disabled"
+                                                   FontSize="17"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="ScheduledWorldBackupStatusDescription"
+                                                   Text="Choose an interval and click Start World Backup Schedule."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,4,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                Margin="20,0,0,0">
+
+                                        <TextBlock Text="NEXT WORLD BACKUP"
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   FontSize="11"
+                                                   HorizontalAlignment="Right"/>
+
+                                        <TextBlock x:Name="NextScheduledWorldBackupText"
+                                                   Text="—"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Right"
+                                                   Margin="0,3,0,0"/>
+
+                                    </StackPanel>
+
+                                </Grid>
+
+                            </Border>
+
+                            <!-- Scheduled world backup controls -->
+                            <Border Style="{StaticResource CardStyle}">
+
+                                <Grid>
+
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel>
+
+                                        <TextBlock Text="Scheduled Full World Backups"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock Text="Backup Interval"
+                                                   Margin="0,16,0,6"/>
+
+                                        <ComboBox x:Name="ScheduledWorldBackupIntervalComboBox"
+                                                  Width="250"
+                                                  HorizontalAlignment="Left"
+                                                  SelectedIndex="2">
+
+                                            <ComboBoxItem Content="30 minutes"
+                                                          Tag="30"/>
+
+                                            <ComboBoxItem Content="60 minutes"
+                                                          Tag="60"/>
+
+                                            <ComboBoxItem Content="Every 3 hours"
+                                                          Tag="180"/>
+
+                                            <ComboBoxItem Content="Every 6 hours"
+                                                          Tag="360"/>
+
+                                            <ComboBoxItem Content="Every 12 hours"
+                                                          Tag="720"/>
+
+                                            <ComboBoxItem Content="Every 24 hours"
+                                                          Tag="1440"/>
+
+                                        </ComboBox>
+
+                                        <TextBlock Text="While PalServer is running, the manager first requests a REST API world save, waits briefly for disk writes, then creates a compressed ZIP of the complete active world save folder."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="700"
+                                                   Margin="0,12,0,0"/>
+
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="24,0,0,0">
+
+                                        <Button x:Name="StartScheduledWorldBackupButton"
+                                                Content="Start World Backup Schedule"
+                                                Width="205"
+                                                Height="42"
+                                                Margin="0,0,10,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="StopScheduledWorldBackupButton"
+                                                Content="Stop World Backup Schedule"
+                                                Width="205"
                                                 Height="42"
                                                 IsEnabled="False"
                                                 Style="{StaticResource SecondaryButtonStyle}"/>

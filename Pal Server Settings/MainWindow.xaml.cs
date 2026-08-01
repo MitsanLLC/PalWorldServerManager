@@ -5,6 +5,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -18,6 +19,7 @@ namespace PalWorldServerManager
     {
         private readonly PalworldSettingsService _settingsService = new();
         private readonly BackupService _backupService = new();
+        private readonly WorldBackupService _worldBackupService = new();
         private readonly ServerProcessService _serverProcessService = new();
         private readonly AppPreferencesService _preferencesService = new();
         private readonly PalworldRestApiService _restApiService = new();
@@ -25,6 +27,7 @@ namespace PalWorldServerManager
         private readonly DispatcherTimer _autoSaveTimer;
         private readonly DispatcherTimer _restartScheduleTimer;
         private readonly DispatcherTimer _scheduledBackupTimer;
+        private readonly DispatcherTimer _scheduledWorldBackupTimer;
         private readonly ObservableCollection<string> _activityLog = new();
         private bool _metricsRefreshInProgress;
         private int _serverStatusTickCount;
@@ -36,6 +39,11 @@ namespace PalWorldServerManager
         private readonly HashSet<string> _restartWarningsSent = new();
         private DateTime? _nextScheduledBackupTime;
         private bool _scheduledBackupInProgress;
+        private DateTime? _nextScheduledWorldBackupTime;
+        private bool _scheduledWorldBackupInProgress;
+        private bool _playerRefreshInProgress;
+        private int _playerRefreshTickCount;
+        private string? _lastKnownPlayerIdsSignature;
 
         private string? _settingsFilePath;
         private string _fileContents = "";
@@ -74,12 +82,18 @@ namespace PalWorldServerManager
             _scheduledBackupTimer = new DispatcherTimer();
             _scheduledBackupTimer.Tick += ScheduledBackupTimer_Tick;
 
+            _scheduledWorldBackupTimer = new DispatcherTimer();
+            _scheduledWorldBackupTimer.Tick += ScheduledWorldBackupTimer_Tick;
+
             WireSchedulerEvents();
 
             if (_preferences.AttachToRunningServerOnStartup)
             {
                 _serverProcessService.AttachToRunningServer();
             }
+
+            RestoreLastSettingsFile();
+            RestoreSchedulerPreferences();
 
             UpdateServerProcessDisplay();
             AddActivity("PalWorld Server Manager started.");
@@ -93,6 +107,14 @@ namespace PalWorldServerManager
             RestoreBackupButton.Click += RestoreBackupButton_Click;
             DeleteBackupButton.Click += DeleteBackupButton_Click;
             BackupListView.SelectionChanged += BackupListView_SelectionChanged;
+
+            BackupWorldNowButton.Click += BackupWorldNowButton_Click;
+            RefreshWorldBackupsButton.Click += RefreshWorldBackupsButton_Click;
+            OpenWorldSaveFolderButton.Click += OpenWorldSaveFolderButton_Click;
+            OpenWorldBackupFolderButton.Click += OpenWorldBackupFolderButton_Click;
+            RestoreWorldBackupButton.Click += RestoreWorldBackupButton_Click;
+            DeleteWorldBackupButton.Click += DeleteWorldBackupButton_Click;
+            WorldBackupListView.SelectionChanged += WorldBackupListView_SelectionChanged;
         }
 
         private void WireServerControlEvents()
@@ -289,7 +311,9 @@ namespace PalWorldServerManager
                     $"Player kicked: {player.Name} ({player.UserId})");
 
                 await Task.Delay(750);
-                await RefreshPlayersAsync();
+                await RefreshPlayersAsync(
+                    preserveSelection: false,
+                    logResult: false);
             }
             catch (Exception ex)
             {
@@ -359,7 +383,9 @@ namespace PalWorldServerManager
                     $"Player banned: {player.Name} ({player.UserId})");
 
                 await Task.Delay(750);
-                await RefreshPlayersAsync();
+                await RefreshPlayersAsync(
+                    preserveSelection: false,
+                    logResult: false);
             }
             catch (Exception ex)
             {
@@ -461,12 +487,33 @@ namespace PalWorldServerManager
 
         private async void RefreshPlayersButton_Click(object sender, RoutedEventArgs e)
         {
-            await RefreshPlayersAsync();
+            await RefreshPlayersAsync(
+                preserveSelection: true,
+                logResult: true);
         }
 
-        private async Task RefreshPlayersAsync()
+        private async Task RefreshPlayersAsync(
+            bool preserveSelection = false,
+            bool logResult = true)
         {
-            PlayersListView.SelectedItem = null;
+            if (_playerRefreshInProgress)
+            {
+                return;
+            }
+
+            _playerRefreshInProgress = true;
+
+            string? selectedUserId =
+                preserveSelection &&
+                PlayersListView.SelectedItem is PalworldPlayer selectedPlayer
+                    ? selectedPlayer.UserId
+                    : null;
+
+            if (!preserveSelection)
+            {
+                PlayersListView.SelectedItem = null;
+            }
+
             PlayersListView.ItemsSource = null;
             PlayersListView.Visibility = Visibility.Collapsed;
             NoPlayersPanel.Visibility = Visibility.Visible;
@@ -475,6 +522,7 @@ namespace PalWorldServerManager
             if (!_serverProcessService.IsRunning)
             {
                 UpdatePlayersPageForUnavailableServer();
+                _playerRefreshInProgress = false;
                 return;
             }
 
@@ -486,6 +534,8 @@ namespace PalWorldServerManager
                     "Load the active PalWorldSettings.ini before retrieving players.";
                 NoPlayersText.Text =
                     "The manager needs the REST API port and Admin Password from the active server settings.";
+
+                _playerRefreshInProgress = false;
                 return;
             }
 
@@ -497,6 +547,8 @@ namespace PalWorldServerManager
                     "Enable the REST API in Settings, save, and restart PalServer.";
                 NoPlayersText.Text =
                     "Player information is retrieved through the Palworld REST API.";
+
+                _playerRefreshInProgress = false;
                 return;
             }
 
@@ -508,14 +560,20 @@ namespace PalWorldServerManager
                     "Set an Admin Password in the active server configuration.";
                 NoPlayersText.Text =
                     "Palworld requires REST API authentication to retrieve the player list.";
+
+                _playerRefreshInProgress = false;
                 return;
             }
 
             RefreshPlayersButton.IsEnabled = false;
-            PlayersStatusDot.Fill = GetBrush("WarningColor");
-            PlayersStatusTitle.Text = "Refreshing players...";
-            PlayersStatusDescription.Text =
-                "Reading the current player list from the Palworld REST API.";
+
+            if (logResult)
+            {
+                PlayersStatusDot.Fill = GetBrush("WarningColor");
+                PlayersStatusTitle.Text = "Refreshing players...";
+                PlayersStatusDescription.Text =
+                    "Reading the current player list from the Palworld REST API.";
+            }
 
             try
             {
@@ -538,12 +596,31 @@ namespace PalWorldServerManager
                         "Server online — no players connected";
 
                     PlayersStatusDescription.Text =
-                        "The REST API connection is working.";
+                        "Live player monitoring is active.";
 
                     NoPlayersText.Text =
                         "No players are currently connected to the server.";
 
-                    AddActivity("Player list refreshed: 0 players online.");
+                    string emptySignature = "";
+
+                    if (_lastKnownPlayerIdsSignature != emptySignature)
+                    {
+                        if (_lastKnownPlayerIdsSignature is not null)
+                        {
+                            AddActivity(
+                                "All players have left the server.");
+                        }
+
+                        _lastKnownPlayerIdsSignature =
+                            emptySignature;
+                    }
+
+                    if (logResult)
+                    {
+                        AddActivity(
+                            "Player list refreshed: 0 players online.");
+                    }
+
                     return;
                 }
 
@@ -560,10 +637,50 @@ namespace PalWorldServerManager
                     $"{players.Count} player{(players.Count == 1 ? "" : "s")} online";
 
                 PlayersStatusDescription.Text =
-                    "Player information retrieved successfully.";
+                    "Live player monitoring is active.";
 
-                AddActivity(
-                    $"Player list refreshed: {players.Count} player{(players.Count == 1 ? "" : "s")} online.");
+                if (!string.IsNullOrWhiteSpace(selectedUserId))
+                {
+                    foreach (PalworldPlayer player in players)
+                    {
+                        if (string.Equals(
+                                player.UserId,
+                                selectedUserId,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            PlayersListView.SelectedItem =
+                                player;
+
+                            break;
+                        }
+                    }
+                }
+
+                string signature =
+                    string.Join(
+                        "|",
+                        players
+                            .Select(player => player.UserId)
+                            .OrderBy(userId => userId, StringComparer.OrdinalIgnoreCase));
+
+                if (_lastKnownPlayerIdsSignature is not null &&
+                    !string.Equals(
+                        _lastKnownPlayerIdsSignature,
+                        signature,
+                        StringComparison.Ordinal))
+                {
+                    AddActivity(
+                        $"Player list changed: {players.Count} player{(players.Count == 1 ? "" : "s")} online.");
+                }
+
+                _lastKnownPlayerIdsSignature =
+                    signature;
+
+                if (logResult)
+                {
+                    AddActivity(
+                        $"Player list refreshed: {players.Count} player{(players.Count == 1 ? "" : "s")} online.");
+                }
             }
             catch (Exception ex)
             {
@@ -579,13 +696,19 @@ namespace PalWorldServerManager
                 NoPlayersText.Text =
                     "Check that PalServer is running and that the REST API settings match the active PalWorldSettings.ini.";
 
-                AddActivity(
-                    $"Player list refresh failed: {ex.Message}");
+                if (logResult)
+                {
+                    AddActivity(
+                        $"Player list refresh failed: {ex.Message}");
+                }
             }
             finally
             {
                 RefreshPlayersButton.IsEnabled =
                     true;
+
+                _playerRefreshInProgress =
+                    false;
             }
         }
 
@@ -606,6 +729,9 @@ namespace PalWorldServerManager
 
             PlayersOnlineCountText.Text =
                 "—";
+
+            _lastKnownPlayerIdsSignature =
+                null;
 
             NoPlayersText.Text =
                 "The player list will be available while the Palworld server is running.";
@@ -697,6 +823,190 @@ namespace PalWorldServerManager
             }
         }
 
+        private void RestoreLastSettingsFile()
+        {
+            if (string.IsNullOrWhiteSpace(
+                    _preferences.LastSettingsFilePath))
+            {
+                return;
+            }
+
+            if (!System.IO.File.Exists(
+                    _preferences.LastSettingsFilePath))
+            {
+                AddActivity(
+                    $"Last settings file was not found: {_preferences.LastSettingsFilePath}");
+
+                _preferences.LastSettingsFilePath = "";
+                _preferencesService.Save(_preferences);
+                return;
+            }
+
+            try
+            {
+                LoadSettingsFile(
+                    _preferences.LastSettingsFilePath);
+
+                AddActivity(
+                    "Last settings file loaded automatically.");
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Automatic settings load failed: {ex.Message}");
+            }
+        }
+
+        private void RestoreSchedulerPreferences()
+        {
+            SelectComboBoxItemByTag(
+                AutoSaveIntervalComboBox,
+                _preferences.AutoSaveIntervalMinutes.ToString(
+                    CultureInfo.InvariantCulture));
+
+            SelectComboBoxItemByTag(
+                ScheduledBackupIntervalComboBox,
+                _preferences.ScheduledBackupIntervalMinutes.ToString(
+                    CultureInfo.InvariantCulture));
+
+            SelectComboBoxItemByTag(
+                ScheduledWorldBackupIntervalComboBox,
+                _preferences.ScheduledWorldBackupIntervalMinutes.ToString(
+                    CultureInfo.InvariantCulture));
+
+            SelectComboBoxItemByTag(
+                RestartScheduleComboBox,
+                string.IsNullOrWhiteSpace(
+                    _preferences.RestartScheduleTag)
+                    ? "360"
+                    : _preferences.RestartScheduleTag);
+
+            DailyRestartTimeTextBox.Text =
+                string.IsNullOrWhiteSpace(
+                    _preferences.DailyRestartTime)
+                    ? "04:00"
+                    : _preferences.DailyRestartTime;
+
+            RestartScheduleComboBox_SelectionChanged(
+                RestartScheduleComboBox,
+                new SelectionChangedEventArgs(
+                    Selector.SelectionChangedEvent,
+                    Array.Empty<object>(),
+                    Array.Empty<object>()));
+
+            if (_currentSettings is null)
+            {
+                return;
+            }
+
+            if (_preferences.AutoSaveEnabled)
+            {
+                int interval =
+                    Math.Max(
+                        1,
+                        _preferences.AutoSaveIntervalMinutes);
+
+                _autoSaveTimer.Interval =
+                    TimeSpan.FromMinutes(
+                        interval);
+
+                _nextAutoSaveTime =
+                    DateTime.Now.AddMinutes(
+                        interval);
+
+                _autoSaveTimer.Start();
+                UpdateAutoSaveDisplay(true);
+
+                AddActivity(
+                    $"Automatic world saves restored: every {interval} minutes.");
+            }
+
+            if (_preferences.ScheduledBackupEnabled)
+            {
+                int interval =
+                    Math.Max(
+                        1,
+                        _preferences.ScheduledBackupIntervalMinutes);
+
+                _scheduledBackupTimer.Interval =
+                    TimeSpan.FromMinutes(
+                        interval);
+
+                _nextScheduledBackupTime =
+                    DateTime.Now.AddMinutes(
+                        interval);
+
+                _scheduledBackupTimer.Start();
+                UpdateScheduledBackupDisplay(true);
+
+                AddActivity(
+                    $"Configuration backup schedule restored: every {interval} minutes.");
+            }
+
+            if (_preferences.ScheduledWorldBackupEnabled)
+            {
+                int interval =
+                    Math.Max(
+                        1,
+                        _preferences.ScheduledWorldBackupIntervalMinutes);
+
+                _scheduledWorldBackupTimer.Interval =
+                    TimeSpan.FromMinutes(
+                        interval);
+
+                _nextScheduledWorldBackupTime =
+                    DateTime.Now.AddMinutes(
+                        interval);
+
+                _scheduledWorldBackupTimer.Start();
+                UpdateScheduledWorldBackupDisplay(true);
+
+                AddActivity(
+                    $"Full world backup schedule restored: every {interval} minutes.");
+            }
+
+            if (_preferences.RestartScheduleEnabled)
+            {
+                if (TryCalculateNextRestartTime(
+                        out DateTime nextRestart,
+                        showErrors: false))
+                {
+                    _restartWarningsSent.Clear();
+                    _nextRestartTime = nextRestart;
+                    _restartScheduleTimer.Start();
+                    UpdateRestartScheduleDisplay(true);
+
+                    AddActivity(
+                        $"Restart schedule restored. Next restart: {nextRestart:MMM d, yyyy h:mm:ss tt}.");
+                }
+                else
+                {
+                    _preferences.RestartScheduleEnabled = false;
+                    _preferencesService.Save(_preferences);
+                }
+            }
+        }
+
+        private static void SelectComboBoxItemByTag(
+            ComboBox comboBox,
+            string tag)
+        {
+            foreach (object item in comboBox.Items)
+            {
+                if (item is ComboBoxItem comboBoxItem &&
+                    string.Equals(
+                        comboBoxItem.Tag?.ToString(),
+                        tag,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    comboBox.SelectedItem =
+                        comboBoxItem;
+
+                    return;
+                }
+            }
+        }
+
         private void WireSchedulerEvents()
         {
             StartAutoSaveButton.Click += StartAutoSaveButton_Click;
@@ -709,15 +1019,270 @@ namespace PalWorldServerManager
             StartScheduledBackupButton.Click += StartScheduledBackupButton_Click;
             StopScheduledBackupButton.Click += StopScheduledBackupButton_Click;
 
+            StartScheduledWorldBackupButton.Click += StartScheduledWorldBackupButton_Click;
+            StopScheduledWorldBackupButton.Click += StopScheduledWorldBackupButton_Click;
+
             UpdateAutoSaveDisplay(false);
             UpdateRestartScheduleDisplay(false);
             UpdateScheduledBackupDisplay(false);
+            UpdateScheduledWorldBackupDisplay(false);
             RestartScheduleComboBox_SelectionChanged(
                 RestartScheduleComboBox,
                 new SelectionChangedEventArgs(
                     Selector.SelectionChangedEvent,
                     Array.Empty<object>(),
                     Array.Empty<object>()));
+        }
+
+        private void StartScheduledWorldBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    _settingsFilePath))
+            {
+                MessageBox.Show(
+                    "Load the active PalWorldSettings.ini first.",
+                    "Settings File Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!TryGetSelectedScheduledWorldBackupInterval(
+                    out int intervalMinutes))
+            {
+                return;
+            }
+
+            try
+            {
+                // Validate that the active world folder can be resolved now,
+                // rather than waiting until the first scheduled run.
+                _worldBackupService.GetWorldDirectory(
+                    _settingsFilePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "The active Palworld world-save folder could not be found.\n\n" +
+                    ex.Message,
+                    "World Backup Schedule Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+
+                return;
+            }
+
+            _scheduledWorldBackupTimer.Stop();
+
+            _scheduledWorldBackupTimer.Interval =
+                TimeSpan.FromMinutes(
+                    intervalMinutes);
+
+            _nextScheduledWorldBackupTime =
+                DateTime.Now.AddMinutes(
+                    intervalMinutes);
+
+            _scheduledWorldBackupTimer.Start();
+
+            _preferences.ScheduledWorldBackupEnabled =
+                true;
+
+            _preferences.ScheduledWorldBackupIntervalMinutes =
+                intervalMinutes;
+
+            _preferencesService.Save(
+                _preferences);
+
+            UpdateScheduledWorldBackupDisplay(
+                true);
+
+            AddActivity(
+                $"Full world backup schedule enabled every {intervalMinutes} minutes.");
+        }
+
+        private void StopScheduledWorldBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            _scheduledWorldBackupTimer.Stop();
+
+            _nextScheduledWorldBackupTime =
+                null;
+
+            _preferences.ScheduledWorldBackupEnabled =
+                false;
+
+            _preferencesService.Save(
+                _preferences);
+
+            UpdateScheduledWorldBackupDisplay(
+                false);
+
+            AddActivity(
+                "Full world backup schedule disabled.");
+        }
+
+        private async void ScheduledWorldBackupTimer_Tick(
+            object? sender,
+            EventArgs e)
+        {
+            if (_scheduledWorldBackupInProgress)
+            {
+                return;
+            }
+
+            _scheduledWorldBackupInProgress =
+                true;
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(
+                        _settingsFilePath))
+                {
+                    AddActivity(
+                        "Scheduled world backup skipped because no settings file is loaded.");
+
+                    return;
+                }
+
+                if (_serverProcessService.IsRunning)
+                {
+                    if (!TryGetRestApiConnectionSettings(
+                            out int restApiPort,
+                            out string adminPassword))
+                    {
+                        AddActivity(
+                            "Scheduled world backup skipped because REST API settings are unavailable.");
+
+                        return;
+                    }
+
+                    AddActivity(
+                        "Scheduled world backup: requesting world save.");
+
+                    await _restApiService.SaveWorldAsync(
+                        restApiPort,
+                        adminPassword);
+
+                    _lastWorldSaveTime =
+                        DateTime.Now;
+
+                    LastWorldSaveText.Text =
+                        $"Last World Save: {_lastWorldSaveTime:MMM d, yyyy h:mm:ss tt}";
+
+                    await Task.Delay(
+                        1500);
+                }
+
+                string backupPath =
+                    _worldBackupService.CreateWorldBackup(
+                        _settingsFilePath);
+
+                AddActivity(
+                    $"Scheduled full world backup created: {System.IO.Path.GetFileName(backupPath)}");
+
+                RefreshWorldBackupList();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Scheduled full world backup failed: {ex.Message}");
+            }
+            finally
+            {
+                _scheduledWorldBackupInProgress =
+                    false;
+
+                ScheduleNextWorldBackup();
+            }
+        }
+
+        private void ScheduleNextWorldBackup()
+        {
+            if (!_scheduledWorldBackupTimer.IsEnabled)
+            {
+                return;
+            }
+
+            _nextScheduledWorldBackupTime =
+                DateTime.Now.Add(
+                    _scheduledWorldBackupTimer.Interval);
+
+            UpdateScheduledWorldBackupDisplay(
+                true);
+        }
+
+        private bool TryGetSelectedScheduledWorldBackupInterval(
+            out int intervalMinutes)
+        {
+            intervalMinutes =
+                0;
+
+            if (ScheduledWorldBackupIntervalComboBox.SelectedItem
+                    is not ComboBoxItem selectedItem ||
+                !int.TryParse(
+                    selectedItem.Tag?.ToString(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out intervalMinutes) ||
+                intervalMinutes <= 0)
+            {
+                MessageBox.Show(
+                    "Select a valid full world backup interval.",
+                    "Invalid World Backup Interval",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private void UpdateScheduledWorldBackupDisplay(
+            bool enabled)
+        {
+            StartScheduledWorldBackupButton.IsEnabled =
+                !enabled;
+
+            StopScheduledWorldBackupButton.IsEnabled =
+                enabled;
+
+            ScheduledWorldBackupIntervalComboBox.IsEnabled =
+                !enabled;
+
+            ScheduledWorldBackupStatusDot.Fill =
+                enabled
+                    ? GetBrush("SuccessColor")
+                    : GetBrush("WarningColor");
+
+            ScheduledWorldBackupStatusTitle.Text =
+                enabled
+                    ? "Scheduled world backups enabled"
+                    : "Scheduled world backups disabled";
+
+            if (enabled &&
+                _nextScheduledWorldBackupTime.HasValue)
+            {
+                ScheduledWorldBackupStatusDescription.Text =
+                    $"The complete active world will be backed up every {_scheduledWorldBackupTimer.Interval.TotalMinutes:0} minutes.";
+
+                NextScheduledWorldBackupText.Text =
+                    _nextScheduledWorldBackupTime.Value.ToString(
+                        "MMM d h:mm tt",
+                        CultureInfo.CurrentCulture);
+            }
+            else
+            {
+                ScheduledWorldBackupStatusDescription.Text =
+                    "Choose an interval and click Start World Backup Schedule.";
+
+                NextScheduledWorldBackupText.Text =
+                    "—";
+            }
         }
 
         private void StartScheduledBackupButton_Click(
@@ -742,6 +1307,7 @@ namespace PalWorldServerManager
             }
 
             _scheduledBackupTimer.Stop();
+            _scheduledWorldBackupTimer.Stop();
 
             _scheduledBackupTimer.Interval =
                 TimeSpan.FromMinutes(
@@ -752,6 +1318,10 @@ namespace PalWorldServerManager
                     intervalMinutes);
 
             _scheduledBackupTimer.Start();
+
+            _preferences.ScheduledBackupEnabled = true;
+            _preferences.ScheduledBackupIntervalMinutes = intervalMinutes;
+            _preferencesService.Save(_preferences);
 
             UpdateScheduledBackupDisplay(true);
 
@@ -765,6 +1335,9 @@ namespace PalWorldServerManager
         {
             _scheduledBackupTimer.Stop();
             _nextScheduledBackupTime = null;
+
+            _preferences.ScheduledBackupEnabled = false;
+            _preferencesService.Save(_preferences);
 
             UpdateScheduledBackupDisplay(false);
 
@@ -956,6 +1529,13 @@ namespace PalWorldServerManager
             _nextRestartTime = nextRestart;
             _restartScheduleTimer.Start();
 
+            _preferences.RestartScheduleEnabled = true;
+            _preferences.RestartScheduleTag =
+                (RestartScheduleComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "360";
+            _preferences.DailyRestartTime =
+                DailyRestartTimeTextBox.Text.Trim();
+            _preferencesService.Save(_preferences);
+
             UpdateRestartScheduleDisplay(true);
 
             AddActivity(
@@ -967,9 +1547,11 @@ namespace PalWorldServerManager
             RoutedEventArgs e)
         {
             _restartScheduleTimer.Stop();
-            _scheduledBackupTimer.Stop();
             _nextRestartTime = null;
             _restartWarningsSent.Clear();
+
+            _preferences.RestartScheduleEnabled = false;
+            _preferencesService.Save(_preferences);
 
             UpdateRestartScheduleDisplay(false);
 
@@ -1192,18 +1774,22 @@ namespace PalWorldServerManager
         }
 
         private bool TryCalculateNextRestartTime(
-            out DateTime nextRestart)
+            out DateTime nextRestart,
+            bool showErrors = true)
         {
             nextRestart = default;
 
             if (RestartScheduleComboBox.SelectedItem
                 is not ComboBoxItem selectedItem)
             {
-                MessageBox.Show(
-                    "Select a restart schedule.",
-                    "Restart Schedule Required",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                if (showErrors)
+                {
+                    MessageBox.Show(
+                        "Select a restart schedule.",
+                        "Restart Schedule Required",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
 
                 return false;
             }
@@ -1222,11 +1808,14 @@ namespace PalWorldServerManager
                         CultureInfo.InvariantCulture,
                         out TimeSpan dailyTime))
                 {
-                    MessageBox.Show(
-                        "Enter the daily restart time using 24-hour HH:mm format, for example 04:00 or 23:30.",
-                        "Invalid Restart Time",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    if (showErrors)
+                    {
+                        MessageBox.Show(
+                            "Enter the daily restart time using 24-hour HH:mm format, for example 04:00 or 23:30.",
+                            "Invalid Restart Time",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
 
                     return false;
                 }
@@ -1252,11 +1841,14 @@ namespace PalWorldServerManager
                     out int intervalMinutes) ||
                 intervalMinutes <= 0)
             {
-                MessageBox.Show(
-                    "The selected restart interval is invalid.",
-                    "Invalid Restart Schedule",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                if (showErrors)
+                {
+                    MessageBox.Show(
+                        "The selected restart interval is invalid.",
+                        "Invalid Restart Schedule",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
 
                 return false;
             }
@@ -1382,6 +1974,10 @@ namespace PalWorldServerManager
 
             _autoSaveTimer.Start();
 
+            _preferences.AutoSaveEnabled = true;
+            _preferences.AutoSaveIntervalMinutes = intervalMinutes;
+            _preferencesService.Save(_preferences);
+
             UpdateAutoSaveDisplay(true);
 
             AddActivity(
@@ -1394,6 +1990,9 @@ namespace PalWorldServerManager
         {
             _autoSaveTimer.Stop();
             _nextAutoSaveTime = null;
+
+            _preferences.AutoSaveEnabled = false;
+            _preferencesService.Save(_preferences);
 
             UpdateAutoSaveDisplay(false);
 
@@ -1559,12 +2158,20 @@ namespace PalWorldServerManager
 
             if (selectedPage == 2)
             {
-                _ = RefreshPlayersAsync();
+                _playerRefreshTickCount = 0;
+                _ = RefreshPlayersAsync(
+                    preserveSelection: true,
+                    logResult: false);
+            }
+            else
+            {
+                _playerRefreshTickCount = 0;
             }
 
             if (selectedPage == 4)
             {
                 RefreshBackupList();
+                RefreshWorldBackupList();
             }
         }
 
@@ -1613,7 +2220,12 @@ namespace PalWorldServerManager
             SaveButton.IsEnabled = true;
             StatusTextBlock.Text = $"Loaded: {_settingsFilePath}";
             RefreshBackupList();
+            RefreshWorldBackupList();
             _ = RefreshLiveMetricsAsync();
+
+            _preferences.LastSettingsFilePath = filePath;
+            _preferencesService.Save(_preferences);
+
             AddActivity($"Loaded settings: {filePath}");
         }
 
@@ -1809,13 +2421,17 @@ namespace PalWorldServerManager
 
         private void SavePreferencesFromControls()
         {
-            _preferences = new AppPreferences
-            {
-                ServerExecutablePath = ServerExecutablePathTextBox.Text.Trim(),
-                LaunchArguments = ServerLaunchArgumentsTextBox.Text.Trim(),
-                AttachToRunningServerOnStartup = AttachToRunningServerCheckBox.IsChecked == true
-            };
+            _preferences.ServerExecutablePath =
+                ServerExecutablePathTextBox.Text.Trim();
+
+            _preferences.LaunchArguments =
+                ServerLaunchArgumentsTextBox.Text.Trim();
+
+            _preferences.AttachToRunningServerOnStartup =
+                AttachToRunningServerCheckBox.IsChecked == true;
+
             _preferencesService.Save(_preferences);
+
             AddActivity("Server preferences saved.");
         }
 
@@ -2193,6 +2809,25 @@ namespace PalWorldServerManager
                 _serverStatusTickCount = 0;
                 _ = RefreshLiveMetricsAsync();
             }
+
+            if (MainNavigationTabControl.SelectedIndex == 2 &&
+                _serverProcessService.IsRunning)
+            {
+                _playerRefreshTickCount++;
+
+                if (_playerRefreshTickCount >= 3)
+                {
+                    _playerRefreshTickCount = 0;
+
+                    _ = RefreshPlayersAsync(
+                        preserveSelection: true,
+                        logResult: false);
+                }
+            }
+            else
+            {
+                _playerRefreshTickCount = 0;
+            }
         }
 
         private void UpdateServerProcessDisplay()
@@ -2238,6 +2873,368 @@ namespace PalWorldServerManager
             }
 
             return $"{uptime.Hours:00}:{uptime.Minutes:00}:{uptime.Seconds:00}";
+        }
+
+        // World save backup management
+        private async void BackupWorldNowButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!EnsureSettingsFileLoaded())
+            {
+                return;
+            }
+
+            BackupWorldNowButton.IsEnabled = false;
+
+            try
+            {
+                if (_serverProcessService.IsRunning)
+                {
+                    if (!TryGetRestApiConnectionSettings(
+                            out int restApiPort,
+                            out string adminPassword))
+                    {
+                        return;
+                    }
+
+                    WorldBackupStatusText.Text =
+                        "Saving world through the REST API before creating the backup...";
+
+                    await _restApiService.SaveWorldAsync(
+                        restApiPort,
+                        adminPassword);
+
+                    await Task.Delay(1000);
+                }
+
+                WorldBackupStatusText.Text =
+                    "Creating compressed world backup...";
+
+                string backupPath =
+                    _worldBackupService.CreateWorldBackup(
+                        _settingsFilePath!);
+
+                AddActivity(
+                    $"World backup created: {System.IO.Path.GetFileName(backupPath)}");
+
+                RefreshWorldBackupList();
+
+                MessageBox.Show(
+                    $"World backup created successfully.\n\n{backupPath}",
+                    "World Backup Created",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"World backup failed: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not create the world backup.\n\n" +
+                    ex.Message,
+                    "World Backup Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                BackupWorldNowButton.IsEnabled =
+                    true;
+            }
+        }
+
+        private void RefreshWorldBackupsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            RefreshWorldBackupList();
+        }
+
+        private void OpenWorldSaveFolderButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!EnsureSettingsFileLoaded())
+            {
+                return;
+            }
+
+            try
+            {
+                _worldBackupService.OpenWorldSaveFolder(
+                    _settingsFilePath!);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not open the Palworld save folder.\n\n" +
+                    ex.Message,
+                    "Save Folder Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenWorldBackupFolderButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!EnsureSettingsFileLoaded())
+            {
+                return;
+            }
+
+            try
+            {
+                _worldBackupService.OpenWorldBackupFolder(
+                    _settingsFilePath!);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not open the world backup folder.\n\n" +
+                    ex.Message,
+                    "Backup Folder Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void WorldBackupListView_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            bool selected =
+                WorldBackupListView.SelectedItem
+                is WorldBackupItem;
+
+            RestoreWorldBackupButton.IsEnabled =
+                selected;
+
+            DeleteWorldBackupButton.IsEnabled =
+                selected;
+
+            if (WorldBackupListView.SelectedItem
+                is WorldBackupItem backup)
+            {
+                SelectedWorldBackupText.Text =
+                    $"Selected: {backup.FileName}";
+            }
+            else
+            {
+                SelectedWorldBackupText.Text =
+                    "Select a world backup to restore or delete.";
+            }
+        }
+
+        private void RestoreWorldBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!EnsureSettingsFileLoaded())
+            {
+                return;
+            }
+
+            if (_serverProcessService.IsRunning)
+            {
+                MessageBox.Show(
+                    "Stop PalServer before restoring a world backup.\n\n" +
+                    "Restoring while the server is running could corrupt save data.",
+                    "Server Must Be Stopped",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            if (WorldBackupListView.SelectedItem
+                is not WorldBackupItem selectedBackup)
+            {
+                return;
+            }
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    $"Restore this world backup?\n\n" +
+                    $"{selectedBackup.FileName}\n\n" +
+                    "A safety backup of the current world will be created automatically before restoration.",
+                    "Confirm World Restore",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            RestoreWorldBackupButton.IsEnabled =
+                false;
+
+            try
+            {
+                WorldBackupStatusText.Text =
+                    "Restoring world backup...";
+
+                string safetyBackup =
+                    _worldBackupService.RestoreWorldBackup(
+                        _settingsFilePath!,
+                        selectedBackup);
+
+                AddActivity(
+                    $"World backup restored: {selectedBackup.FileName}");
+
+                AddActivity(
+                    $"Pre-restore safety backup created: {System.IO.Path.GetFileName(safetyBackup)}");
+
+                RefreshWorldBackupList();
+
+                MessageBox.Show(
+                    "World restored successfully.\n\n" +
+                    $"Safety backup:\n{safetyBackup}",
+                    "World Restored",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"World restore failed: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not restore the world backup.\n\n" +
+                    ex.Message,
+                    "World Restore Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                WorldBackupListView_SelectionChanged(
+                    WorldBackupListView,
+                    new SelectionChangedEventArgs(
+                        Selector.SelectionChangedEvent,
+                        Array.Empty<object>(),
+                        Array.Empty<object>()));
+            }
+        }
+
+        private void DeleteWorldBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (WorldBackupListView.SelectedItem
+                is not WorldBackupItem selectedBackup)
+            {
+                return;
+            }
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    $"Permanently delete this world backup?\n\n" +
+                    $"{selectedBackup.FileName}\n\n" +
+                    "This cannot be undone.",
+                    "Delete World Backup",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                _worldBackupService.DeleteWorldBackup(
+                    selectedBackup);
+
+                AddActivity(
+                    $"World backup deleted: {selectedBackup.FileName}");
+
+                RefreshWorldBackupList();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not delete the world backup.\n\n" +
+                    ex.Message,
+                    "Delete World Backup Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void RefreshWorldBackupList()
+        {
+            WorldBackupListView.ItemsSource =
+                null;
+
+            WorldBackupListView.Visibility =
+                Visibility.Collapsed;
+
+            NoWorldBackupsPanel.Visibility =
+                Visibility.Visible;
+
+            RestoreWorldBackupButton.IsEnabled =
+                false;
+
+            DeleteWorldBackupButton.IsEnabled =
+                false;
+
+            SelectedWorldBackupText.Text =
+                "Select a world backup to restore or delete.";
+
+            if (string.IsNullOrWhiteSpace(
+                    _settingsFilePath))
+            {
+                WorldBackupStatusText.Text =
+                    "Load the active PalWorldSettings.ini to manage full world backups.";
+
+                NoWorldBackupsText.Text =
+                    "Load the active server settings file first.";
+
+                return;
+            }
+
+            try
+            {
+                var backups =
+                    _worldBackupService.GetWorldBackups(
+                        _settingsFilePath);
+
+                if (backups.Count == 0)
+                {
+                    WorldBackupStatusText.Text =
+                        "No full world backups have been created yet.";
+
+                    NoWorldBackupsText.Text =
+                        "Click Backup World Now to create the first full save-data backup.";
+
+                    return;
+                }
+
+                WorldBackupListView.ItemsSource =
+                    backups;
+
+                WorldBackupListView.Visibility =
+                    Visibility.Visible;
+
+                NoWorldBackupsPanel.Visibility =
+                    Visibility.Collapsed;
+
+                WorldBackupStatusText.Text =
+                    $"{backups.Count} world backup{(backups.Count == 1 ? "" : "s")} available.";
+            }
+            catch (Exception ex)
+            {
+                WorldBackupStatusText.Text =
+                    $"World backups unavailable: {ex.Message}";
+
+                NoWorldBackupsText.Text =
+                    "The loaded settings file may not be the active Palworld server configuration.";
+            }
         }
 
         // Backup management
@@ -2361,6 +3358,18 @@ namespace PalWorldServerManager
 
         private void UpdateBackupPageForNoFile()
         {
+            WorldBackupListView.ItemsSource = null;
+            WorldBackupListView.Visibility = Visibility.Collapsed;
+            NoWorldBackupsPanel.Visibility = Visibility.Visible;
+            WorldBackupStatusText.Text =
+                "Load the active PalWorldSettings.ini to manage full world backups.";
+            NoWorldBackupsText.Text =
+                "Load the active server settings file first.";
+            RestoreWorldBackupButton.IsEnabled = false;
+            DeleteWorldBackupButton.IsEnabled = false;
+            SelectedWorldBackupText.Text =
+                "Select a world backup to restore or delete.";
+
             BackupListView.ItemsSource = null;
             BackupListView.Visibility = Visibility.Collapsed;
             NoBackupsPanel.Visibility = Visibility.Visible;
