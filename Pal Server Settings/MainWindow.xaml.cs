@@ -2,6 +2,7 @@
 using PalWorldServerManager.Models;
 using PalWorldServerManager.Services;
 using System;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
@@ -19,6 +20,7 @@ namespace PalWorldServerManager
         private readonly AppPreferencesService _preferencesService = new();
         private readonly PalworldRestApiService _restApiService = new();
         private readonly DispatcherTimer _serverStatusTimer;
+        private readonly ObservableCollection<string> _activityLog = new();
 
         private string? _settingsFilePath;
         private string _fileContents = "";
@@ -33,6 +35,8 @@ namespace PalWorldServerManager
             PopulatePreferencesControls();
             WireBackupEvents();
             WireServerControlEvents();
+            WireConsoleEvents();
+            WirePlayerEvents();
             UpdateBackupPageForNoFile();
 
             _serverStatusTimer = new DispatcherTimer
@@ -48,6 +52,7 @@ namespace PalWorldServerManager
             }
 
             UpdateServerProcessDisplay();
+            AddActivity("PalWorld Server Manager started.");
             Closed += MainWindow_Closed;
         }
 
@@ -70,6 +75,249 @@ namespace PalWorldServerManager
             ForceStopServerButton.Click += ForceStopServerButton_Click;
         }
 
+        private void WirePlayerEvents()
+        {
+            RefreshPlayersButton.Click += RefreshPlayersButton_Click;
+            UpdatePlayersPageForUnavailableServer();
+        }
+
+        private async void RefreshPlayersButton_Click(object sender, RoutedEventArgs e)
+        {
+            await RefreshPlayersAsync();
+        }
+
+        private async Task RefreshPlayersAsync()
+        {
+            PlayersListView.ItemsSource = null;
+            PlayersListView.Visibility = Visibility.Collapsed;
+            NoPlayersPanel.Visibility = Visibility.Visible;
+            PlayersOnlineCountText.Text = "—";
+
+            if (!_serverProcessService.IsRunning)
+            {
+                UpdatePlayersPageForUnavailableServer();
+                return;
+            }
+
+            if (_currentSettings is null)
+            {
+                PlayersStatusDot.Fill = GetBrush("WarningColor");
+                PlayersStatusTitle.Text = "Settings file required";
+                PlayersStatusDescription.Text =
+                    "Load the active PalWorldSettings.ini before retrieving players.";
+                NoPlayersText.Text =
+                    "The manager needs the REST API port and Admin Password from the active server settings.";
+                return;
+            }
+
+            if (!_currentSettings.RestApiEnabled)
+            {
+                PlayersStatusDot.Fill = GetBrush("WarningColor");
+                PlayersStatusTitle.Text = "REST API disabled";
+                PlayersStatusDescription.Text =
+                    "Enable the REST API in Settings, save, and restart PalServer.";
+                NoPlayersText.Text =
+                    "Player information is retrieved through the Palworld REST API.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentSettings.AdminPassword))
+            {
+                PlayersStatusDot.Fill = GetBrush("WarningColor");
+                PlayersStatusTitle.Text = "Admin Password required";
+                PlayersStatusDescription.Text =
+                    "Set an Admin Password in the active server configuration.";
+                NoPlayersText.Text =
+                    "Palworld requires REST API authentication to retrieve the player list.";
+                return;
+            }
+
+            RefreshPlayersButton.IsEnabled = false;
+            PlayersStatusDot.Fill = GetBrush("WarningColor");
+            PlayersStatusTitle.Text = "Refreshing players...";
+            PlayersStatusDescription.Text =
+                "Reading the current player list from the Palworld REST API.";
+
+            try
+            {
+                PalworldPlayersResponse response =
+                    await _restApiService.GetPlayersAsync(
+                        _currentSettings.RestApiPort,
+                        _currentSettings.AdminPassword);
+
+                var players = response.Players;
+
+                PlayersOnlineCountText.Text =
+                    $"{players.Count} / {_currentSettings.ServerPlayerMaxNum}";
+
+                PlayersStatusDot.Fill =
+                    GetBrush("SuccessColor");
+
+                if (players.Count == 0)
+                {
+                    PlayersStatusTitle.Text =
+                        "Server online — no players connected";
+
+                    PlayersStatusDescription.Text =
+                        "The REST API connection is working.";
+
+                    NoPlayersText.Text =
+                        "No players are currently connected to the server.";
+
+                    AddActivity("Player list refreshed: 0 players online.");
+                    return;
+                }
+
+                PlayersListView.ItemsSource =
+                    players;
+
+                PlayersListView.Visibility =
+                    Visibility.Visible;
+
+                NoPlayersPanel.Visibility =
+                    Visibility.Collapsed;
+
+                PlayersStatusTitle.Text =
+                    $"{players.Count} player{(players.Count == 1 ? "" : "s")} online";
+
+                PlayersStatusDescription.Text =
+                    "Player information retrieved successfully.";
+
+                AddActivity(
+                    $"Player list refreshed: {players.Count} player{(players.Count == 1 ? "" : "s")} online.");
+            }
+            catch (Exception ex)
+            {
+                PlayersStatusDot.Fill =
+                    GetBrush("WarningColor");
+
+                PlayersStatusTitle.Text =
+                    "Could not retrieve players";
+
+                PlayersStatusDescription.Text =
+                    ex.Message;
+
+                NoPlayersText.Text =
+                    "Check that PalServer is running and that the REST API settings match the active PalWorldSettings.ini.";
+
+                AddActivity(
+                    $"Player list refresh failed: {ex.Message}");
+            }
+            finally
+            {
+                RefreshPlayersButton.IsEnabled =
+                    true;
+            }
+        }
+
+        private void UpdatePlayersPageForUnavailableServer()
+        {
+            PlayersListView.ItemsSource = null;
+            PlayersListView.Visibility = Visibility.Collapsed;
+            NoPlayersPanel.Visibility = Visibility.Visible;
+
+            PlayersStatusDot.Fill =
+                GetBrush("WarningColor");
+
+            PlayersStatusTitle.Text =
+                "Server offline";
+
+            PlayersStatusDescription.Text =
+                "Start PalServer to view connected players.";
+
+            PlayersOnlineCountText.Text =
+                "—";
+
+            NoPlayersText.Text =
+                "The player list will be available while the Palworld server is running.";
+        }
+
+        private void WireConsoleEvents()
+        {
+            ConsoleListBox.ItemsSource = _activityLog;
+            ClearConsoleButton.Click += ClearConsoleButton_Click;
+            SendAnnouncementButton.Click += SendAnnouncementButton_Click;
+        }
+
+        private async void SendAnnouncementButton_Click(object sender, RoutedEventArgs e)
+        {
+            string message = AnnouncementTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                MessageBox.Show(
+                    "Enter an announcement message first.",
+                    "Announcement Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!_serverProcessService.IsRunning)
+            {
+                MessageBox.Show(
+                    "The Palworld server is not running.",
+                    "Server Offline",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(out int restApiPort, out string adminPassword))
+            {
+                return;
+            }
+
+            SendAnnouncementButton.IsEnabled = false;
+
+            try
+            {
+                await _restApiService.AnnounceAsync(
+                    restApiPort,
+                    adminPassword,
+                    message);
+
+                AddActivity($"Announcement sent: {message}");
+                AnnouncementTextBox.Clear();
+            }
+            catch (Exception ex)
+            {
+                AddActivity($"Announcement failed: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not send the announcement.\n\n" +
+                    ex.Message,
+                    "Announcement Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                SendAnnouncementButton.IsEnabled = true;
+            }
+        }
+
+        private void ClearConsoleButton_Click(object sender, RoutedEventArgs e)
+        {
+            _activityLog.Clear();
+            AddActivity("Console cleared.");
+        }
+
+        private void AddActivity(string message)
+        {
+            string entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            _activityLog.Add(entry);
+
+            if (ConsoleAutoScrollCheckBox.IsChecked == true &&
+                _activityLog.Count > 0)
+            {
+                ConsoleListBox.ScrollIntoView(
+                    _activityLog[_activityLog.Count - 1]);
+            }
+        }
+
         private void MainWindow_Closed(object? sender, EventArgs e)
         {
             _serverStatusTimer.Stop();
@@ -86,6 +334,11 @@ namespace PalWorldServerManager
             }
 
             MainNavigationTabControl.SelectedIndex = selectedPage;
+
+            if (selectedPage == 2)
+            {
+                _ = RefreshPlayersAsync();
+            }
 
             if (selectedPage == 4)
             {
@@ -138,6 +391,7 @@ namespace PalWorldServerManager
             SaveButton.IsEnabled = true;
             StatusTextBlock.Text = $"Loaded: {_settingsFilePath}";
             RefreshBackupList();
+            AddActivity($"Loaded settings: {filePath}");
         }
 
         private void PopulateEditor(ServerSettings settings)
@@ -272,6 +526,7 @@ namespace PalWorldServerManager
                 UpdateDashboard(updatedSettings);
                 RefreshBackupList();
                 StatusTextBlock.Text = $"Saved: {_settingsFilePath}\nBackup: {backupPath}";
+                AddActivity($"Settings saved. Backup created: {System.IO.Path.GetFileName(backupPath)}");
 
                 MessageBox.Show(
                     $"Settings saved successfully.\n\nBackup created:\n{backupPath}",
@@ -338,6 +593,7 @@ namespace PalWorldServerManager
                 AttachToRunningServerOnStartup = AttachToRunningServerCheckBox.IsChecked == true
             };
             _preferencesService.Save(_preferences);
+            AddActivity("Server preferences saved.");
         }
 
         private void StartServerButton_Click(object sender, RoutedEventArgs e)
@@ -346,6 +602,7 @@ namespace PalWorldServerManager
             {
                 SavePreferencesFromControls();
                 _serverProcessService.StartServer(_preferences.ServerExecutablePath, _preferences.LaunchArguments);
+                AddActivity("Palworld server started.");
                 UpdateServerProcessDisplay();
             }
             catch (Exception ex)
@@ -379,6 +636,7 @@ namespace PalWorldServerManager
             }
 
             SetServerControlButtonsEnabled(false);
+            AddActivity("Graceful server shutdown requested.");
             ServerProcessStatusTitle.Text = "Stopping server...";
             ServerProcessStatusDescription.Text = "Saving the world before shutdown.";
 
@@ -387,6 +645,7 @@ namespace PalWorldServerManager
                 await _restApiService.SaveWorldAsync(
                     restApiPort,
                     adminPassword);
+                AddActivity("World save completed through REST API.");
 
                 ServerProcessStatusDescription.Text =
                     "World saved. Sending graceful shutdown request...";
@@ -400,8 +659,13 @@ namespace PalWorldServerManager
                 bool exited = await WaitForServerToExitAsync(
                     TimeSpan.FromSeconds(30));
 
-                if (!exited)
+                if (exited)
                 {
+                    AddActivity("Palworld server stopped gracefully.");
+                }
+                else
+                {
+                    AddActivity("Graceful shutdown timed out; server is still running.");
                     MessageBox.Show(
                         "Palworld accepted the shutdown request, but the server is still running.\n\n" +
                         "Wait a little longer before using Force Stop.",
@@ -447,6 +711,7 @@ namespace PalWorldServerManager
             try
             {
                 _serverProcessService.ForceStopServer();
+                AddActivity("Server force stopped.");
                 UpdateServerProcessDisplay();
             }
             catch (Exception ex)
@@ -484,6 +749,7 @@ namespace PalWorldServerManager
                 SavePreferencesFromControls();
 
                 SetServerControlButtonsEnabled(false);
+                AddActivity("Safe server restart requested.");
                 ServerProcessStatusTitle.Text = "Restarting server...";
                 ServerProcessStatusDescription.Text = "Saving the world before restart.";
 
@@ -524,6 +790,7 @@ namespace PalWorldServerManager
                 _serverProcessService.StartServer(
                     _preferences.ServerExecutablePath,
                     _preferences.LaunchArguments);
+                AddActivity("Palworld server restarted successfully.");
 
                 UpdateServerProcessDisplay();
             }
@@ -721,6 +988,7 @@ namespace PalWorldServerManager
                 string safetyBackupPath = _backupService.RestoreBackup(_settingsFilePath!, selectedBackup);
                 LoadSettingsFile(_settingsFilePath!);
                 StatusTextBlock.Text = $"Backup restored successfully.\nSafety backup: {safetyBackupPath}";
+                AddActivity($"Backup restored: {selectedBackup.FileName}");
                 MessageBox.Show($"The backup was restored successfully.\n\nSafety backup created:\n{safetyBackupPath}", "Backup Restored", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -748,6 +1016,7 @@ namespace PalWorldServerManager
             try
             {
                 _backupService.DeleteBackup(selectedBackup);
+                AddActivity($"Backup deleted: {selectedBackup.FileName}");
                 RefreshBackupList();
             }
             catch (Exception ex)

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -17,18 +18,15 @@ namespace PalWorldServerManager.Services
 
         public PalworldRestApiService()
         {
-            _httpClient =
-                new HttpClient
-                {
-                    Timeout =
-                        TimeSpan.FromSeconds(10)
-                };
+            _httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(10)
+            };
 
-            _jsonOptions =
-                new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
+            _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
         }
 
         public async Task<bool> TestConnectionAsync(
@@ -85,6 +83,41 @@ namespace PalWorldServerManager.Services
             return information
                 ?? throw new InvalidOperationException(
                     "The server returned an empty information response.");
+        }
+
+        public async Task<PalworldPlayersResponse> GetPlayersAsync(
+            int port,
+            string adminPassword,
+            CancellationToken cancellationToken = default)
+        {
+            using HttpRequestMessage request =
+                CreateRequest(
+                    HttpMethod.Get,
+                    port,
+                    "players",
+                    adminPassword);
+
+            using HttpResponseMessage response =
+                await _httpClient.SendAsync(
+                    request,
+                    cancellationToken);
+
+            await EnsureSuccessAsync(
+                response,
+                "read the player list",
+                cancellationToken);
+
+            string json =
+                await response.Content.ReadAsStringAsync(
+                    cancellationToken);
+
+            PalworldPlayersResponse? players =
+                JsonSerializer.Deserialize<PalworldPlayersResponse>(
+                    json,
+                    _jsonOptions);
+
+            return players
+                ?? new PalworldPlayersResponse();
         }
 
         public async Task<PalworldServerMetrics> GetMetricsAsync(
@@ -160,15 +193,11 @@ namespace PalWorldServerManager.Services
                     "The shutdown delay cannot be negative.");
             }
 
-            ShutdownRequest body =
-                new ShutdownRequest
-                {
-                    WaitTime =
-                        waitTimeSeconds,
-
-                    Message =
-                        message ?? ""
-                };
+            ShutdownRequest body = new ShutdownRequest
+            {
+                WaitTime = waitTimeSeconds,
+                Message = message ?? ""
+            };
 
             using HttpRequestMessage request =
                 CreateJsonRequest(
@@ -225,12 +254,10 @@ namespace PalWorldServerManager.Services
                     nameof(message));
             }
 
-            AnnouncementRequest body =
-                new AnnouncementRequest
-                {
-                    Message =
-                        message.Trim()
-                };
+            AnnouncementRequest body = new AnnouncementRequest
+            {
+                Message = message.Trim()
+            };
 
             using HttpRequestMessage request =
                 CreateJsonRequest(
@@ -411,6 +438,48 @@ namespace PalWorldServerManager.Services
 
         [JsonPropertyName("worldguid")]
         public string WorldGuid { get; set; } = "";
+    }
+
+    public sealed class PalworldPlayersResponse
+    {
+        [JsonPropertyName("players")]
+        public List<PalworldPlayer> Players { get; set; } = new();
+    }
+
+    public sealed class PalworldPlayer
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        [JsonPropertyName("accountName")]
+        public string AccountName { get; set; } = "";
+
+        [JsonPropertyName("playerId")]
+        public string PlayerId { get; set; } = "";
+
+        [JsonPropertyName("userId")]
+        public string UserId { get; set; } = "";
+
+        [JsonPropertyName("ip")]
+        public string IpAddress { get; set; } = "";
+
+        [JsonPropertyName("ping")]
+        public double Ping { get; set; }
+
+        [JsonPropertyName("location_x")]
+        public double LocationX { get; set; }
+
+        [JsonPropertyName("location_y")]
+        public double LocationY { get; set; }
+
+        [JsonPropertyName("level")]
+        public int Level { get; set; }
+
+        [JsonPropertyName("building_count")]
+        public int BuildingCount { get; set; }
+
+        public string PingDisplay =>
+            $"{Ping:0.0} ms";
     }
 
     public sealed class PalworldServerMetrics

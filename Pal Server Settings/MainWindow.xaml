@@ -1118,22 +1118,169 @@
 
                     <Grid Margin="28">
 
-                        <StackPanel VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    MaxWidth="520">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                            <TextBlock Text="Players"
-                                       FontSize="29"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
+                        <!-- Players header -->
+                        <Grid Grid.Row="0"
+                              Margin="0,0,0,18">
 
-                            <TextBlock Text="Live player information will require the Palworld REST API or RCON connection."
-                                       Foreground="{StaticResource MutedTextColor}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       Margin="0,12,0,0"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        </StackPanel>
+                            <StackPanel>
+
+                                <TextBlock Text="Players"
+                                           FontSize="29"
+                                           FontWeight="SemiBold"/>
+
+                                <TextBlock Text="View players currently connected to the Palworld server."
+                                           Foreground="{StaticResource MutedTextColor}"
+                                           Margin="0,6,0,0"/>
+
+                            </StackPanel>
+
+                            <Button x:Name="RefreshPlayersButton"
+                                    Grid.Column="1"
+                                    Content="Refresh Players"
+                                    Width="145"
+                                    Height="40"
+                                    Style="{StaticResource PrimaryButtonStyle}"/>
+
+                        </Grid>
+
+                        <!-- Players status -->
+                        <Border Grid.Row="1"
+                                Style="{StaticResource CardStyle}"
+                                Margin="0,0,0,14">
+
+                            <Grid>
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Ellipse x:Name="PlayersStatusDot"
+                                         Width="12"
+                                         Height="12"
+                                         Fill="{StaticResource WarningColor}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,12,0"/>
+
+                                <StackPanel Grid.Column="1">
+
+                                    <TextBlock x:Name="PlayersStatusTitle"
+                                               Text="Players not loaded"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock x:Name="PlayersStatusDescription"
+                                               Text="Start the server and load PalWorldSettings.ini to view connected players."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0"/>
+
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2"
+                                            Margin="20,0,0,0"
+                                            VerticalAlignment="Center">
+
+                                    <TextBlock Text="ONLINE"
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               FontSize="11"
+                                               HorizontalAlignment="Right"/>
+
+                                    <TextBlock x:Name="PlayersOnlineCountText"
+                                               Text="—"
+                                               FontSize="24"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Right"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Player list -->
+                        <Border Grid.Row="2"
+                                Background="#CC08111F"
+                                BorderBrush="{StaticResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10">
+
+                            <Grid>
+
+                                <ListView x:Name="PlayersListView"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Foreground="{StaticResource TextColor}"
+                                          HorizontalContentAlignment="Stretch">
+
+                                    <ListView.View>
+                                        <GridView>
+
+                                            <GridViewColumn Header="Player"
+                                                            Width="170"
+                                                            DisplayMemberBinding="{Binding Name}"/>
+
+                                            <GridViewColumn Header="Account"
+                                                            Width="155"
+                                                            DisplayMemberBinding="{Binding AccountName}"/>
+
+                                            <GridViewColumn Header="Level"
+                                                            Width="70"
+                                                            DisplayMemberBinding="{Binding Level}"/>
+
+                                            <GridViewColumn Header="Ping"
+                                                            Width="80"
+                                                            DisplayMemberBinding="{Binding PingDisplay}"/>
+
+                                            <GridViewColumn Header="User ID"
+                                                            Width="210"
+                                                            DisplayMemberBinding="{Binding UserId}"/>
+
+                                            <GridViewColumn Header="Player ID"
+                                                            Width="260"
+                                                            DisplayMemberBinding="{Binding PlayerId}"/>
+
+                                        </GridView>
+                                    </ListView.View>
+
+                                </ListView>
+
+                                <StackPanel x:Name="NoPlayersPanel"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Visibility="Visible">
+
+                                    <TextBlock Text="No players online"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"/>
+
+                                    <TextBlock x:Name="NoPlayersText"
+                                               Text="Refresh the player list after someone joins the server."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="420"
+                                               Margin="0,8,0,0"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                        </Border>
 
                     </Grid>
                 </TabItem>
@@ -1143,24 +1290,175 @@
 
                     <Grid Margin="28">
 
-                        <StackPanel VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    MaxWidth="520">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                            <TextBlock Text="Console"
-                                       FontSize="29"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
+                        <!-- Console header -->
+                        <Grid Grid.Row="0"
+                              Margin="0,0,0,18">
 
-                            <TextBlock Text="A live console and server logs will be added after server process controls are implemented."
-                                       Foreground="{StaticResource MutedTextColor}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       Margin="0,12,0,0"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        </StackPanel>
+                            <StackPanel>
+
+                                <TextBlock Text="Console"
+                                           FontSize="29"
+                                           FontWeight="SemiBold"/>
+
+                                <TextBlock Text="Activity from PalWorld Server Manager."
+                                           Foreground="{StaticResource MutedTextColor}"
+                                           Margin="0,6,0,0"/>
+
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+
+                                <CheckBox x:Name="ConsoleAutoScrollCheckBox"
+                                          Content="Auto-scroll"
+                                          IsChecked="True"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,18,0"/>
+
+                                <Button x:Name="ClearConsoleButton"
+                                        Content="Clear Console"
+                                        Width="130"
+                                        Height="40"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+
+                            </StackPanel>
+
+                        </Grid>
+
+                        <!-- Console status -->
+                        <Border Grid.Row="1"
+                                Style="{StaticResource CardStyle}"
+                                Margin="0,0,0,14">
+
+                            <Grid>
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Ellipse Width="12"
+                                         Height="12"
+                                         Fill="{StaticResource SuccessColor}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,12,0"/>
+
+                                <StackPanel Grid.Column="1">
+
+                                    <TextBlock Text="Activity logging enabled"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Text="Server controls, settings, backups, and REST API actions are recorded here."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Announcement composer -->
+                        <Border Grid.Row="2"
+                                Style="{StaticResource CardStyle}"
+                                Margin="0,0,0,14">
+
+                            <Grid>
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Server Announcement"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Text="Send a message to all connected players through the Palworld REST API."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               Margin="0,4,0,10"/>
+
+                                    <TextBox x:Name="AnnouncementTextBox"
+                                             MinHeight="40"
+                                             MaxLength="250"
+                                             VerticalContentAlignment="Center"
+                                             ToolTip="Enter a message to send to all players"/>
+
+                                </StackPanel>
+
+                                <Button x:Name="SendAnnouncementButton"
+                                        Grid.Column="1"
+                                        Content="Send"
+                                        Width="110"
+                                        Height="40"
+                                        Margin="14,34,0,0"
+                                        VerticalAlignment="Top"
+                                        Style="{StaticResource PrimaryButtonStyle}"/>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Activity log -->
+                        <Border Grid.Row="3"
+                                Background="#CC08111F"
+                                BorderBrush="{StaticResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10">
+
+                            <ListBox x:Name="ConsoleListBox"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="{StaticResource TextColor}"
+                                     FontFamily="Consolas"
+                                     FontSize="13"
+                                     HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+
+                                        <TextBlock Text="{Binding}"
+                                                   Foreground="{StaticResource TextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="6,3"/>
+
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+
+                            </ListBox>
+
+                        </Border>
+
+                        <TextBlock Grid.Row="4"
+                                   Text="This console records manager activity and can send REST API announcements. Raw PalServer output will be added separately."
+                                   Foreground="{StaticResource MutedTextColor}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="2,10,0,0"/>
 
                     </Grid>
+
                 </TabItem>
 
                 <!-- BACKUPS -->
