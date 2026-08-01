@@ -1054,22 +1054,182 @@
 
                     <Grid Margin="28">
 
-                        <StackPanel VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    MaxWidth="520">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                            <TextBlock Text="Backups"
-                                       FontSize="29"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
+                        <!-- Backups header -->
+                        <Grid Grid.Row="0"
+                              Margin="0,0,0,18">
 
-                            <TextBlock Text="Your app already creates timestamped INI backups. A backup browser and restore button will be added here."
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+
+                                <TextBlock Text="Backups"
+                                           FontSize="29"
+                                           FontWeight="SemiBold"/>
+
+                                <TextBlock Text="Review, restore, and delete configuration backups for the loaded settings file."
+                                           Foreground="{StaticResource MutedTextColor}"
+                                           Margin="0,6,0,0"/>
+
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal">
+
+                                <Button x:Name="RefreshBackupsButton"
+                                        Content="Refresh"
+                                        Width="110"
+                                        Height="40"
+                                        Margin="0,0,10,0"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                <Button x:Name="OpenBackupFolderButton"
+                                        Content="Open Folder"
+                                        Width="125"
+                                        Height="40"
+                                        Style="{StaticResource PrimaryButtonStyle}"/>
+
+                            </StackPanel>
+
+                        </Grid>
+
+                        <!-- Backup status -->
+                        <Border Grid.Row="1"
+                                Style="{StaticResource CardStyle}"
+                                Margin="0,0,0,18">
+
+                            <Grid>
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Ellipse x:Name="BackupStatusDot"
+                                         Width="14"
+                                         Height="14"
+                                         Fill="{StaticResource WarningColor}"
+                                         VerticalAlignment="Center"
+                                         Margin="0,0,14,0"/>
+
+                                <StackPanel Grid.Column="1">
+
+                                    <TextBlock x:Name="BackupStatusTitleText"
+                                               Text="No settings file loaded"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock x:Name="BackupStatusDescriptionText"
+                                               Text="Load PalWorldSettings.ini before viewing backups."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,5,0,0"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Backup list -->
+                        <Border Grid.Row="2"
+                                Style="{StaticResource CardStyle}">
+
+                            <Grid>
+
+                                <ListView x:Name="BackupListView"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Foreground="{StaticResource TextColor}"
+                                          HorizontalContentAlignment="Stretch">
+
+                                    <ListView.View>
+                                        <GridView>
+
+                                            <GridViewColumn Header="Created"
+                                                            Width="190"
+                                                            DisplayMemberBinding="{Binding CreatedAtDisplay}"/>
+
+                                            <GridViewColumn Header="File Name"
+                                                            Width="430"
+                                                            DisplayMemberBinding="{Binding FileName}"/>
+
+                                            <GridViewColumn Header="Size"
+                                                            Width="110"
+                                                            DisplayMemberBinding="{Binding SizeDisplay}"/>
+
+                                        </GridView>
+                                    </ListView.View>
+
+                                </ListView>
+
+                                <StackPanel x:Name="NoBackupsPanel"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            MaxWidth="520">
+
+                                    <TextBlock Text="No backups found"
+                                               FontSize="21"
+                                               FontWeight="SemiBold"
+                                               TextAlignment="Center"/>
+
+                                    <TextBlock x:Name="NoBackupsText"
+                                               Text="Save the settings file to create your first timestamped backup."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Margin="0,8,0,0"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Backup actions -->
+                        <Grid Grid.Row="3"
+                              Margin="0,18,0,0">
+
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="Restoring creates a safety backup of the current file first."
                                        Foreground="{StaticResource MutedTextColor}"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       Margin="0,12,0,0"/>
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"/>
 
-                        </StackPanel>
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal">
+
+                                <Button x:Name="DeleteBackupButton"
+                                        Content="Delete Selected"
+                                        Width="145"
+                                        Height="42"
+                                        Margin="0,0,10,0"
+                                        IsEnabled="False"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                <Button x:Name="RestoreBackupButton"
+                                        Content="Restore Selected"
+                                        Width="155"
+                                        Height="42"
+                                        IsEnabled="False"
+                                        Style="{StaticResource PrimaryButtonStyle}"/>
+
+                            </StackPanel>
+
+                        </Grid>
 
                     </Grid>
                 </TabItem>
