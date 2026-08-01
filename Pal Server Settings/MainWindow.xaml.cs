@@ -904,6 +904,13 @@ namespace PalWorldServerManager
                     metrics.ServerFps.ToString(
                         CultureInfo.InvariantCulture);
 
+                HealthCpuText.Text =
+                    $"{_serverProcessService.GetCpuUsagePercent():0.0}%";
+
+                HealthMemoryText.Text =
+                    FormatMemory(
+                        _serverProcessService.MemoryUsageBytes);
+
                 LiveWorldUptimeText.Text =
                     FormatUptime(
                         TimeSpan.FromSeconds(
@@ -968,6 +975,8 @@ namespace PalWorldServerManager
         {
             LivePlayersText.Text = "—";
             LiveServerFpsText.Text = "—";
+            HealthCpuText.Text = "—";
+            HealthMemoryText.Text = "—";
             LiveWorldUptimeText.Text = "—";
             LiveWorldDayText.Text = "—";
             LiveBaseCountText.Text = "—";
@@ -3960,9 +3969,6 @@ namespace PalWorldServerManager
                 : "Select PalServer.exe and click Start Server.";
 
             ServerProcessIdText.Text = _serverProcessService.ProcessId?.ToString(CultureInfo.InvariantCulture) ?? "—";
-            ServerCpuUsageText.Text = running ? $"{_serverProcessService.GetCpuUsagePercent():0.0}%" : "—";
-            ServerMemoryUsageText.Text = running ? FormatMemory(_serverProcessService.MemoryUsageBytes) : "—";
-            ServerUptimeText.Text = running ? FormatUptime(_serverProcessService.Uptime) : "—";
 
             StartServerButton.IsEnabled = !running;
             StopServerButton.IsEnabled = running;
@@ -4076,7 +4082,7 @@ namespace PalWorldServerManager
                 state;
 
             ServerHealthStatusTitle.Text =
-                $"Server health: {state}";
+                $"Server Health: {state}";
 
             ServerHealthStatusDescription.Text =
                 description;
@@ -4105,7 +4111,9 @@ namespace PalWorldServerManager
                         DateTime.Now;
 
                     LastHealthWarningText.Text =
-                        $"Last Health Warning: {_lastHealthWarningTime:MMM d, yyyy h:mm:ss tt}";
+                        _lastHealthWarningTime.Value.ToString(
+                            "MMM d, yyyy h:mm:ss tt",
+                            CultureInfo.CurrentCulture);
 
                     AddActivity(
                         $"HEALTH {state.ToUpperInvariant()}: {description}");
