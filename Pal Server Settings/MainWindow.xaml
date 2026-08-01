@@ -391,7 +391,7 @@
                                                FontSize="29"
                                                FontWeight="SemiBold"/>
 
-                                    <TextBlock Text="Overview of the currently loaded Palworld server configuration."
+                                    <TextBlock Text="Monitor and control the local Palworld dedicated server."
                                                Foreground="{StaticResource MutedTextColor}"
                                                Margin="0,6,0,0"/>
 
@@ -417,12 +417,185 @@
                                 </StackPanel>
                             </Grid>
 
-                            <!-- File status -->
+                            <!-- Server runtime status -->
                             <Border Style="{StaticResource CardStyle}"
                                     Margin="0,0,0,18">
 
                                 <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
+                                    <Ellipse x:Name="ServerProcessStatusDot"
+                                             Width="15"
+                                             Height="15"
+                                             Fill="{StaticResource WarningColor}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,14,0"/>
+
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock x:Name="ServerProcessStatusTitle"
+                                                   Text="Server status unknown"
+                                                   FontSize="19"
+                                                   FontWeight="SemiBold"/>
+
+                                        <TextBlock x:Name="ServerProcessStatusDescription"
+                                                   Text="Select PalServer.exe to begin monitoring and control."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
+
+                                    <TextBlock x:Name="ServerProcessIdText"
+                                               Grid.Column="2"
+                                               Text="PID: —"
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Runtime metric cards -->
+                            <Grid Margin="0,0,0,18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Style="{StaticResource CardStyle}"
+                                        Margin="0,0,12,0">
+                                    <StackPanel>
+                                        <TextBlock Text="CPU Usage"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+                                        <TextBlock x:Name="ServerCpuUsageText"
+                                                   Text="0.0%"
+                                                   FontSize="25"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,10,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="1"
+                                        Style="{StaticResource CardStyle}"
+                                        Margin="0,0,12,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Memory Usage"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+                                        <TextBlock x:Name="ServerMemoryUsageText"
+                                                   Text="0 MB"
+                                                   FontSize="25"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,10,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="2"
+                                        Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Uptime"
+                                                   Foreground="{StaticResource MutedTextColor}"/>
+                                        <TextBlock x:Name="ServerUptimeText"
+                                                   Text="00:00:00"
+                                                   FontSize="25"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,10,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Server controls -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,18">
+
+                                <StackPanel>
+                                    <TextBlock Text="Server Controls"
+                                               FontSize="19"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Text="Choose the PalServer launcher and configure the command-line arguments used when starting it."
+                                               Foreground="{StaticResource MutedTextColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,6,0,18"/>
+
+                                    <TextBlock Text="PalServer executable"/>
+
+                                    <Grid Margin="0,6,0,16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBox x:Name="ServerExecutablePathTextBox"
+                                                 IsReadOnly="True"
+                                                 Margin="0,0,10,0"/>
+
+                                        <Button x:Name="BrowseServerExecutableButton"
+                                                Grid.Column="1"
+                                                Content="Browse..."
+                                                Width="110"
+                                                Height="38"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+                                    </Grid>
+
+                                    <TextBlock Text="Launch arguments"/>
+
+                                    <TextBox x:Name="ServerLaunchArgumentsTextBox"
+                                             Margin="0,6,0,16"/>
+
+                                    <CheckBox x:Name="AttachToRunningServerCheckBox"
+                                              Content="Attach to an already-running Palworld server when the app starts"
+                                              Margin="0,0,0,18"/>
+
+                                    <WrapPanel>
+                                        <Button x:Name="StartServerButton"
+                                                Content="Start Server"
+                                                Width="130"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                Style="{StaticResource PrimaryButtonStyle}"/>
+
+                                        <Button x:Name="StopServerButton"
+                                                Content="Stop Server"
+                                                Width="130"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="RestartServerButton"
+                                                Content="Restart Server"
+                                                Width="135"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="ForceStopServerButton"
+                                                Content="Force Stop"
+                                                Width="125"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                IsEnabled="False"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                        <Button x:Name="SaveServerPreferencesButton"
+                                                Content="Save Preferences"
+                                                Width="145"
+                                                Height="42"
+                                                Margin="0,0,10,10"
+                                                Style="{StaticResource SecondaryButtonStyle}"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Loaded configuration status -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Margin="0,0,0,18">
+
+                                <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
@@ -436,7 +609,6 @@
                                              Margin="0,0,14,0"/>
 
                                     <StackPanel Grid.Column="1">
-
                                         <TextBlock x:Name="DashboardStatusTitle"
                                                    Text="No settings file loaded"
                                                    FontSize="18"
@@ -447,15 +619,12 @@
                                                    Foreground="{StaticResource MutedTextColor}"
                                                    TextWrapping="Wrap"
                                                    Margin="0,5,0,0"/>
-
                                     </StackPanel>
-
                                 </Grid>
                             </Border>
 
-                            <!-- Metrics row 1 -->
+                            <!-- Configuration metrics row 1 -->
                             <Grid Margin="0,0,0,12">
-
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="2*"/>
                                     <ColumnDefinition Width="*"/>
@@ -465,62 +634,48 @@
                                 <Border Grid.Column="0"
                                         Style="{StaticResource CardStyle}"
                                         Margin="0,0,12,0">
-
                                     <StackPanel>
-
                                         <TextBlock Text="Server Name"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardServerNameText"
                                                    Text="Not loaded"
                                                    FontSize="22"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Column="1"
                                         Style="{StaticResource CardStyle}"
                                         Margin="0,0,12,0">
-
                                     <StackPanel>
-
                                         <TextBlock Text="Maximum Players"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardPlayerLimitText"
                                                    Text="—"
                                                    FontSize="25"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Column="2"
                                         Style="{StaticResource CardStyle}">
-
                                     <StackPanel>
-
                                         <TextBlock Text="XP Rate"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardExpRateText"
                                                    Text="—"
                                                    FontSize="25"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
-
                             </Grid>
 
-                            <!-- Metrics row 2 -->
+                            <!-- Configuration metrics row 2 -->
                             <Grid Margin="0,0,0,18">
-
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
@@ -531,110 +686,58 @@
                                 <Border Grid.Column="0"
                                         Style="{StaticResource CardStyle}"
                                         Margin="0,0,12,0">
-
                                     <StackPanel>
-
                                         <TextBlock Text="Game Mode"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardGameModeText"
                                                    Text="—"
                                                    FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Column="1"
                                         Style="{StaticResource CardStyle}"
                                         Margin="0,0,12,0">
-
                                     <StackPanel>
-
                                         <TextBlock Text="PvP"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardPvpText"
                                                    Text="—"
                                                    FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Column="2"
                                         Style="{StaticResource CardStyle}"
                                         Margin="0,0,12,0">
-
                                     <StackPanel>
-
                                         <TextBlock Text="Hardcore"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardHardcoreText"
                                                    Text="—"
                                                    FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Column="3"
                                         Style="{StaticResource CardStyle}">
-
                                     <StackPanel>
-
                                         <TextBlock Text="Public Port"
                                                    Foreground="{StaticResource MutedTextColor}"/>
-
                                         <TextBlock x:Name="DashboardPortText"
                                                    Text="—"
                                                    FontSize="20"
                                                    FontWeight="SemiBold"
                                                    Margin="0,10,0,0"/>
-
                                     </StackPanel>
                                 </Border>
-
                             </Grid>
-
-                            <!-- Quick actions -->
-                            <Border Style="{StaticResource CardStyle}">
-
-                                <StackPanel>
-
-                                    <TextBlock Text="Quick Actions"
-                                               FontSize="19"
-                                               FontWeight="SemiBold"/>
-
-                                    <TextBlock Text="Load a configuration file or open the full settings editor."
-                                               Foreground="{StaticResource MutedTextColor}"
-                                               Margin="0,6,0,18"/>
-
-                                    <WrapPanel>
-
-                                        <Button Content="Load Settings File"
-                                                Width="160"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                Style="{StaticResource PrimaryButtonStyle}"
-                                                Click="LoadButton_Click"/>
-
-                                        <Button Content="Open Settings Editor"
-                                                Width="170"
-                                                Height="42"
-                                                Margin="0,0,10,10"
-                                                Tag="1"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Click="NavigationButton_Click"/>
-
-                                    </WrapPanel>
-
-                                </StackPanel>
-                            </Border>
 
                         </StackPanel>
 
