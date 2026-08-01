@@ -12,6 +12,7 @@ namespace PalWorldServerManager
     public partial class MainWindow : Window
     {
         private readonly PalworldSettingsService _settingsService;
+        private readonly BackupService _backupService;
 
         private string? _settingsFilePath;
         private string _fileContents = "";
@@ -23,6 +24,26 @@ namespace PalWorldServerManager
 
             _settingsService =
                 new PalworldSettingsService();
+
+            _backupService =
+                new BackupService();
+
+            RefreshBackupsButton.Click +=
+                RefreshBackupsButton_Click;
+
+            OpenBackupFolderButton.Click +=
+                OpenBackupFolderButton_Click;
+
+            RestoreBackupButton.Click +=
+                RestoreBackupButton_Click;
+
+            DeleteBackupButton.Click +=
+                DeleteBackupButton_Click;
+
+            BackupListView.SelectionChanged +=
+                BackupListView_SelectionChanged;
+
+            UpdateBackupPageForNoFile();
         }
 
         private void NavigationButton_Click(
@@ -43,6 +64,12 @@ namespace PalWorldServerManager
 
             MainNavigationTabControl.SelectedIndex =
                 selectedPage;
+
+            // Backups is page index 4.
+            if (selectedPage == 4)
+            {
+                RefreshBackupList();
+            }
         }
 
         private void LoadButton_Click(
@@ -80,6 +107,8 @@ namespace PalWorldServerManager
             {
                 SaveButton.IsEnabled = false;
 
+                UpdateBackupPageForNoFile();
+
                 MessageBox.Show(
                     "Could not load the settings file." +
                     $"\n\n{ex.Message}",
@@ -113,6 +142,8 @@ namespace PalWorldServerManager
 
             StatusTextBlock.Text =
                 $"Loaded: {_settingsFilePath}";
+
+            RefreshBackupList();
         }
 
         private void PopulateEditor(
@@ -553,6 +584,8 @@ namespace PalWorldServerManager
                 UpdateDashboard(
                     updatedSettings);
 
+                RefreshBackupList();
+
                 StatusTextBlock.Text =
                     $"Saved: {_settingsFilePath}" +
                     $"\nBackup: {backupPath}";
@@ -627,6 +660,310 @@ namespace PalWorldServerManager
             DashboardStatusDescription.Text =
                 _settingsFilePath ?? "";
         }
+
+        // -------------------------------------------------
+        // Backup management
+        // -------------------------------------------------
+
+        private void RefreshBackupsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            RefreshBackupList();
+        }
+
+        private void OpenBackupFolderButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!EnsureSettingsFileLoaded())
+            {
+                return;
+            }
+
+            try
+            {
+                _backupService.OpenBackupFolder(
+                    _settingsFilePath!);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not open the backup folder." +
+                    $"\n\n{ex.Message}",
+                    "Folder Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void RestoreBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!EnsureSettingsFileLoaded())
+            {
+                return;
+            }
+
+            if (BackupListView.SelectedItem
+                is not BackupItem selectedBackup)
+            {
+                MessageBox.Show(
+                    "Select a backup to restore.",
+                    "No Backup Selected",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            MessageBoxResult confirmation =
+                MessageBox.Show(
+                    "Restore the selected backup?" +
+                    "\n\nThe current settings file will be backed up first." +
+                    $"\n\nBackup:\n{selectedBackup.FileName}",
+                    "Confirm Restore",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                string safetyBackupPath =
+                    _backupService.RestoreBackup(
+                        _settingsFilePath!,
+                        selectedBackup);
+
+                LoadSettingsFile(
+                    _settingsFilePath!);
+
+                StatusTextBlock.Text =
+                    "Backup restored successfully." +
+                    $"\nSafety backup: {safetyBackupPath}";
+
+                MessageBox.Show(
+                    "The backup was restored successfully." +
+                    $"\n\nSafety backup created:\n{safetyBackupPath}",
+                    "Backup Restored",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not restore the selected backup." +
+                    $"\n\n{ex.Message}",
+                    "Restore Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void DeleteBackupButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (BackupListView.SelectedItem
+                is not BackupItem selectedBackup)
+            {
+                MessageBox.Show(
+                    "Select a backup to delete.",
+                    "No Backup Selected",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            MessageBoxResult confirmation =
+                MessageBox.Show(
+                    "Permanently delete this backup?" +
+                    $"\n\n{selectedBackup.FileName}" +
+                    "\n\nThis cannot be undone.",
+                    "Confirm Delete",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                _backupService.DeleteBackup(
+                    selectedBackup);
+
+                RefreshBackupList();
+
+                MessageBox.Show(
+                    "The backup was deleted.",
+                    "Backup Deleted",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not delete the selected backup." +
+                    $"\n\n{ex.Message}",
+                    "Delete Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void BackupListView_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            bool hasSelection =
+                BackupListView.SelectedItem
+                is BackupItem;
+
+            RestoreBackupButton.IsEnabled =
+                hasSelection;
+
+            DeleteBackupButton.IsEnabled =
+                hasSelection;
+        }
+
+        private void RefreshBackupList()
+        {
+            BackupListView.ItemsSource =
+                null;
+
+            RestoreBackupButton.IsEnabled =
+                false;
+
+            DeleteBackupButton.IsEnabled =
+                false;
+
+            if (string.IsNullOrWhiteSpace(
+                    _settingsFilePath))
+            {
+                UpdateBackupPageForNoFile();
+                return;
+            }
+
+            try
+            {
+                var backups =
+                    _backupService.GetBackups(
+                        _settingsFilePath);
+
+                BackupListView.ItemsSource =
+                    backups;
+
+                bool backupsExist =
+                    backups.Count > 0;
+
+                BackupListView.Visibility =
+                    backupsExist
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+
+                NoBackupsPanel.Visibility =
+                    backupsExist
+                        ? Visibility.Collapsed
+                        : Visibility.Visible;
+
+                BackupStatusDot.Fill =
+                    GetBrush("SuccessColor");
+
+                BackupStatusTitleText.Text =
+                    backupsExist
+                        ? $"{backups.Count} backup" +
+                          (backups.Count == 1 ? "" : "s") +
+                          " found"
+                        : "No backups found";
+
+                BackupStatusDescriptionText.Text =
+                    backupsExist
+                        ? "Select a backup to restore or delete."
+                        : "Save your settings to create a timestamped backup.";
+
+                NoBackupsText.Text =
+                    "Save the settings file to create " +
+                    "your first timestamped backup.";
+            }
+            catch (Exception ex)
+            {
+                BackupListView.Visibility =
+                    Visibility.Collapsed;
+
+                NoBackupsPanel.Visibility =
+                    Visibility.Visible;
+
+                BackupStatusDot.Fill =
+                    GetBrush("WarningColor");
+
+                BackupStatusTitleText.Text =
+                    "Could not load backups";
+
+                BackupStatusDescriptionText.Text =
+                    ex.Message;
+
+                NoBackupsText.Text =
+                    "An error occurred while reading the backup folder.";
+            }
+        }
+
+        private void UpdateBackupPageForNoFile()
+        {
+            BackupListView.ItemsSource =
+                null;
+
+            BackupListView.Visibility =
+                Visibility.Collapsed;
+
+            NoBackupsPanel.Visibility =
+                Visibility.Visible;
+
+            RestoreBackupButton.IsEnabled =
+                false;
+
+            DeleteBackupButton.IsEnabled =
+                false;
+
+            BackupStatusDot.Fill =
+                GetBrush("WarningColor");
+
+            BackupStatusTitleText.Text =
+                "No settings file loaded";
+
+            BackupStatusDescriptionText.Text =
+                "Load PalWorldSettings.ini before viewing backups.";
+
+            NoBackupsText.Text =
+                "Load a settings file to view its available backups.";
+        }
+
+        private bool EnsureSettingsFileLoaded()
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    _settingsFilePath))
+            {
+                return true;
+            }
+
+            MessageBox.Show(
+                "Load a PalWorldSettings.ini file first.",
+                "No File Loaded",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return false;
+        }
+
+        // -------------------------------------------------
+        // Validation and formatting
+        // -------------------------------------------------
 
         private bool TryReadInteger(
             string text,
