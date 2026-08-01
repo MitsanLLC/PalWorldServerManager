@@ -3,6 +3,7 @@ using PalWorldServerManager.Models;
 using PalWorldServerManager.Services;
 using System;
 using System.Globalization;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,6 +17,7 @@ namespace PalWorldServerManager
         private readonly BackupService _backupService = new();
         private readonly ServerProcessService _serverProcessService = new();
         private readonly AppPreferencesService _preferencesService = new();
+        private readonly PalworldRestApiService _restApiService = new();
         private readonly DispatcherTimer _serverStatusTimer;
 
         private string? _settingsFilePath;
@@ -72,6 +74,7 @@ namespace PalWorldServerManager
         {
             _serverStatusTimer.Stop();
             _serverProcessService.Dispose();
+            _restApiService.Dispose();
         }
 
         private void NavigationButton_Click(object sender, RoutedEventArgs e)
@@ -351,23 +354,75 @@ namespace PalWorldServerManager
             }
         }
 
-        private void StopServerButton_Click(object sender, RoutedEventArgs e)
+        private async void StopServerButton_Click(object sender, RoutedEventArgs e)
         {
             if (!_serverProcessService.IsRunning)
             {
                 return;
             }
 
-            bool stopped = _serverProcessService.StopServer(TimeSpan.FromSeconds(15));
-            UpdateServerProcessDisplay();
+            if (!TryGetRestApiConnectionSettings(out int restApiPort, out string adminPassword))
+            {
+                return;
+            }
 
-            if (!stopped)
+            MessageBoxResult result = MessageBox.Show(
+                "Save the world and gracefully shut down the Palworld server?\n\n" +
+                "Players will receive a 10-second shutdown warning.",
+                "Stop Server",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            SetServerControlButtonsEnabled(false);
+            ServerProcessStatusTitle.Text = "Stopping server...";
+            ServerProcessStatusDescription.Text = "Saving the world before shutdown.";
+
+            try
+            {
+                await _restApiService.SaveWorldAsync(
+                    restApiPort,
+                    adminPassword);
+
+                ServerProcessStatusDescription.Text =
+                    "World saved. Sending graceful shutdown request...";
+
+                await _restApiService.ShutdownAsync(
+                    restApiPort,
+                    adminPassword,
+                    10,
+                    "Server shutting down in 10 seconds.");
+
+                bool exited = await WaitForServerToExitAsync(
+                    TimeSpan.FromSeconds(30));
+
+                if (!exited)
+                {
+                    MessageBox.Show(
+                        "Palworld accepted the shutdown request, but the server is still running.\n\n" +
+                        "Wait a little longer before using Force Stop.",
+                        "Server Still Running",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
             {
                 MessageBox.Show(
-                    "The server did not close gracefully. Use Force Stop only if you are sure the world has been saved.",
-                    "Server Still Running",
+                    "The graceful shutdown could not be completed.\n\n" +
+                    $"{ex.Message}\n\n" +
+                    "The server has NOT been force stopped.",
+                    "Shutdown Error",
                     MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                UpdateServerProcessDisplay();
             }
         }
 
@@ -400,21 +455,182 @@ namespace PalWorldServerManager
             }
         }
 
-        private void RestartServerButton_Click(object sender, RoutedEventArgs e)
+        private async void RestartServerButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!_serverProcessService.IsRunning)
+            {
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(out int restApiPort, out string adminPassword))
+            {
+                return;
+            }
+
+            MessageBoxResult result = MessageBox.Show(
+                "Save the world and restart the Palworld server?\n\n" +
+                "Players will receive a 10-second restart warning.",
+                "Restart Server",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
             try
             {
                 SavePreferencesFromControls();
-                _serverProcessService.RestartServer(
+
+                SetServerControlButtonsEnabled(false);
+                ServerProcessStatusTitle.Text = "Restarting server...";
+                ServerProcessStatusDescription.Text = "Saving the world before restart.";
+
+                await _restApiService.SaveWorldAsync(
+                    restApiPort,
+                    adminPassword);
+
+                ServerProcessStatusDescription.Text =
+                    "World saved. Sending graceful shutdown request...";
+
+                await _restApiService.ShutdownAsync(
+                    restApiPort,
+                    adminPassword,
+                    10,
+                    "Server restarting in 10 seconds.");
+
+                bool exited = await WaitForServerToExitAsync(
+                    TimeSpan.FromSeconds(30));
+
+                if (!exited)
+                {
+                    MessageBox.Show(
+                        "The server did not exit within 30 seconds.\n\n" +
+                        "Restart was cancelled. Use Force Stop only if necessary.",
+                        "Restart Cancelled",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+
+                    return;
+                }
+
+                ServerProcessStatusTitle.Text = "Starting server...";
+                ServerProcessStatusDescription.Text =
+                    "Palworld stopped safely. Starting it again...";
+
+                await Task.Delay(1500);
+
+                _serverProcessService.StartServer(
                     _preferences.ServerExecutablePath,
-                    _preferences.LaunchArguments,
-                    TimeSpan.FromSeconds(15));
+                    _preferences.LaunchArguments);
+
                 UpdateServerProcessDisplay();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not restart the server.\n\n{ex.Message}", "Restart Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    "Could not restart the server safely.\n\n" +
+                    $"{ex.Message}",
+                    "Restart Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
+            finally
+            {
+                UpdateServerProcessDisplay();
+            }
+        }
+
+        private bool TryGetRestApiConnectionSettings(
+            out int port,
+            out string adminPassword)
+        {
+            port = 0;
+            adminPassword = "";
+
+            if (_currentSettings is null)
+            {
+                MessageBox.Show(
+                    "Load PalWorldSettings.ini first.\n\n" +
+                    "The manager needs the REST API port and Admin Password from the settings file.",
+                    "Settings Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return false;
+            }
+
+            if (!_currentSettings.RestApiEnabled)
+            {
+                MessageBox.Show(
+                    "The Palworld REST API is disabled.\n\n" +
+                    "Open Settings, enable REST API, save the settings, and restart the Palworld server.",
+                    "REST API Disabled",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            port = _currentSettings.RestApiPort;
+            adminPassword = _currentSettings.AdminPassword;
+
+            if (port < 1 || port > 65535)
+            {
+                MessageBox.Show(
+                    "The REST API port in PalWorldSettings.ini is invalid.",
+                    "Invalid REST API Port",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(adminPassword))
+            {
+                MessageBox.Show(
+                    "An Admin Password is required for safe server control through the REST API.",
+                    "Admin Password Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private async Task<bool> WaitForServerToExitAsync(
+            TimeSpan timeout)
+        {
+            DateTime deadline = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                if (!_serverProcessService.IsRunning)
+                {
+                    return true;
+                }
+
+                await Task.Delay(500);
+            }
+
+            return !_serverProcessService.IsRunning;
+        }
+
+        private void SetServerControlButtonsEnabled(bool enabled)
+        {
+            if (!enabled)
+            {
+                StartServerButton.IsEnabled = false;
+                StopServerButton.IsEnabled = false;
+                RestartServerButton.IsEnabled = false;
+                ForceStopServerButton.IsEnabled = false;
+                return;
+            }
+
+            UpdateServerProcessDisplay();
         }
 
         private void ServerStatusTimer_Tick(object? sender, EventArgs e)
