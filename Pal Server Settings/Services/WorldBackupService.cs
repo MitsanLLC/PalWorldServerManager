@@ -287,6 +287,44 @@ namespace PalWorldServerManager.Services
             return safetyBackup;
         }
 
+        public IReadOnlyList<string> EnforceRetention(
+            string settingsFilePath,
+            int keepMostRecent)
+        {
+            if (keepMostRecent < 1)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(keepMostRecent),
+                    "At least one world backup must be retained.");
+            }
+
+            IReadOnlyList<WorldBackupItem> backups =
+                GetWorldBackups(
+                    settingsFilePath);
+
+            List<string> deletedFiles =
+                new List<string>();
+
+            foreach (WorldBackupItem backup
+                     in backups.Skip(
+                         keepMostRecent))
+            {
+                if (!File.Exists(
+                        backup.FilePath))
+                {
+                    continue;
+                }
+
+                File.Delete(
+                    backup.FilePath);
+
+                deletedFiles.Add(
+                    backup.FileName);
+            }
+
+            return deletedFiles;
+        }
+
         public void DeleteWorldBackup(
             WorldBackupItem backup)
         {

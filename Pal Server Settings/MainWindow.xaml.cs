@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace PalWorldServerManager
@@ -20,6 +21,7 @@ namespace PalWorldServerManager
         private readonly PalworldSettingsService _settingsService = new();
         private readonly BackupService _backupService = new();
         private readonly WorldBackupService _worldBackupService = new();
+        private readonly ServerModService _serverModService = new();
         private readonly ServerProcessService _serverProcessService = new();
         private readonly AppPreferencesService _preferencesService = new();
         private readonly PalworldRestApiService _restApiService = new();
@@ -44,6 +46,17 @@ namespace PalWorldServerManager
         private bool _playerRefreshInProgress;
         private int _playerRefreshTickCount;
         private string? _lastKnownPlayerIdsSignature;
+        private string _lastHealthState = "Unknown";
+        private DateTime? _lastHealthWarningTime;
+        private DateTime? _lastCrashTime;
+        private bool _previousServerRunning;
+        private int _restApiFailureCount;
+        private readonly DispatcherTimer _crashRecoveryTimer;
+        private DateTime? _crashRecoveryTargetTime;
+        private int _crashRecoveryAttemptCount;
+        private int _crashCount;
+        private bool _intentionalServerStopInProgress;
+        private bool _crashRecoveryAttemptInProgress;
 
         private string? _settingsFilePath;
         private string _fileContents = "";
@@ -60,7 +73,11 @@ namespace PalWorldServerManager
             WireServerControlEvents();
             WireConsoleEvents();
             WirePlayerEvents();
+            WireModEvents();
             WireMetricsEvents();
+
+            _serverProcessService.OutputReceived += ServerProcessService_OutputReceived;
+            _serverProcessService.ErrorReceived += ServerProcessService_ErrorReceived;
             UpdateBackupPageForNoFile();
 
             _serverStatusTimer = new DispatcherTimer
@@ -85,6 +102,12 @@ namespace PalWorldServerManager
             _scheduledWorldBackupTimer = new DispatcherTimer();
             _scheduledWorldBackupTimer.Tick += ScheduledWorldBackupTimer_Tick;
 
+            _crashRecoveryTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _crashRecoveryTimer.Tick += CrashRecoveryTimer_Tick;
+
             WireSchedulerEvents();
 
             if (_preferences.AttachToRunningServerOnStartup)
@@ -96,6 +119,15 @@ namespace PalWorldServerManager
             RestoreSchedulerPreferences();
 
             UpdateServerProcessDisplay();
+            _previousServerRunning = _serverProcessService.IsRunning;
+            UpdateServerHealthDisplay(
+                "Unknown",
+                "Health monitoring will begin when PalServer is running.",
+                false);
+
+            WireCrashRecoveryEvents();
+            RestoreCrashRecoveryPreferences();
+
             AddActivity("PalWorld Server Manager started.");
             Closed += MainWindow_Closed;
         }
@@ -126,6 +158,702 @@ namespace PalWorldServerManager
             RestartServerButton.Click += RestartServerButton_Click;
             ForceStopServerButton.Click += ForceStopServerButton_Click;
             SaveWorldButton.Click += SaveWorldButton_Click;
+        }
+
+        private void WireModEvents()
+        {
+            InstallModButton.Click += InstallModButton_Click;
+            RefreshModsButton.Click += RefreshModsButton_Click;
+            OpenModsFolderButton.Click += OpenModsFolderButton_Click;
+            EnableModButton.Click += EnableModButton_Click;
+            DisableModButton.Click += DisableModButton_Click;
+            RemoveModButton.Click += RemoveModButton_Click;
+            ModsListView.SelectionChanged += ModsListView_SelectionChanged;
+
+            UpdateModsPageForUnavailablePath();
+        }
+
+        private void InstallModButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (_serverProcessService.IsRunning)
+            {
+                MessageBox.Show(
+                    "Stop PalServer before installing a mod.",
+                    "Server Must Be Stopped",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            SavePreferencesFromControls();
+
+            OpenFileDialog dialog =
+                new OpenFileDialog
+                {
+                    Title =
+                        "Select Palworld PAK mod",
+
+                    Filter =
+                        "Palworld PAK files (*.pak)|*.pak|" +
+                        "All files (*.*)|*.*",
+
+                    Multiselect =
+                        false
+                };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                string installedPath =
+                    _serverModService.InstallPakMod(
+                        _preferences.ServerExecutablePath,
+                        dialog.FileName);
+
+                AddActivity(
+                    $"Mod installed: {System.IO.Path.GetFileName(installedPath)}");
+
+                RefreshModsList();
+
+                MessageBox.Show(
+                    "Mod installed successfully.\n\n" +
+                    installedPath,
+                    "Mod Installed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Mod install failed: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not install the selected mod.\n\n" +
+                    ex.Message,
+                    "Install Mod Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void RefreshModsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            RefreshModsList();
+        }
+
+        private void OpenModsFolderButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            SavePreferencesFromControls();
+
+            try
+            {
+                _serverModService.OpenPakDirectory(
+                    _preferences.ServerExecutablePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not open the Palworld Paks folder.\n\n" +
+                    ex.Message,
+                    "Mods Folder Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void ModsListView_SelectionChanged(
+            object sender,
+            SelectionChangedEventArgs e)
+        {
+            if (ModsListView.SelectedItem
+                is not ServerModItem selectedMod)
+            {
+                SelectedModText.Text =
+                    "Select a mod above to enable or disable it.";
+
+                EnableModButton.IsEnabled =
+                    false;
+
+                DisableModButton.IsEnabled =
+                    false;
+
+                RemoveModButton.IsEnabled =
+                    false;
+
+                return;
+            }
+
+            SelectedModText.Text =
+                $"Selected: {selectedMod.DisplayName} ({selectedMod.StatusDisplay})";
+
+            bool canModify =
+                !_serverProcessService.IsRunning;
+
+            EnableModButton.IsEnabled =
+                canModify &&
+                !selectedMod.IsEnabled;
+
+            DisableModButton.IsEnabled =
+                canModify &&
+                selectedMod.IsEnabled;
+
+            RemoveModButton.IsEnabled =
+                canModify;
+        }
+
+        private void EnableModButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            SetSelectedModEnabled(
+                true);
+        }
+
+        private void DisableModButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            SetSelectedModEnabled(
+                false);
+        }
+
+        private void RemoveModButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (_serverProcessService.IsRunning)
+            {
+                MessageBox.Show(
+                    "Stop PalServer before removing a mod.",
+                    "Server Must Be Stopped",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            if (ModsListView.SelectedItem
+                is not ServerModItem selectedMod)
+            {
+                return;
+            }
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    "Permanently remove this mod from the server?\n\n" +
+                    $"{selectedMod.DisplayName}\n\n" +
+                    "This deletes the .pak file from the server's Paks folder.",
+                    "Remove Mod",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                _serverModService.RemoveMod(
+                    selectedMod);
+
+                AddActivity(
+                    $"Mod removed: {selectedMod.DisplayName}");
+
+                RefreshModsList();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Mod removal failed for {selectedMod.DisplayName}: {ex.Message}");
+
+                MessageBox.Show(
+                    "Could not remove the selected mod.\n\n" +
+                    ex.Message,
+                    "Remove Mod Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void SetSelectedModEnabled(
+            bool enabled)
+        {
+            if (_serverProcessService.IsRunning)
+            {
+                MessageBox.Show(
+                    "Stop PalServer before changing mod state.",
+                    "Server Must Be Stopped",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            if (ModsListView.SelectedItem
+                is not ServerModItem selectedMod)
+            {
+                return;
+            }
+
+            string action =
+                enabled
+                    ? "enable"
+                    : "disable";
+
+            MessageBoxResult result =
+                MessageBox.Show(
+                    $"{char.ToUpperInvariant(action[0]) + action[1..]} this mod?\n\n" +
+                    $"{selectedMod.DisplayName}\n\n" +
+                    "The server should remain stopped until the mod list is ready.",
+                    $"{(enabled ? "Enable" : "Disable")} Mod",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                _serverModService.SetEnabled(
+                    selectedMod,
+                    enabled);
+
+                AddActivity(
+                    $"Mod {(enabled ? "enabled" : "disabled")}: {selectedMod.DisplayName}");
+
+                RefreshModsList();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Mod {action} failed for {selectedMod.DisplayName}: {ex.Message}");
+
+                MessageBox.Show(
+                    $"Could not {action} the selected mod.\n\n" +
+                    ex.Message,
+                    "Mod Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private void RefreshModsList()
+        {
+            ModsListView.SelectedItem =
+                null;
+
+            ModsListView.ItemsSource =
+                null;
+
+            ModsListView.Visibility =
+                Visibility.Collapsed;
+
+            NoModsPanel.Visibility =
+                Visibility.Visible;
+
+            ModsCountText.Text =
+                "—";
+
+            SavePreferencesFromControls();
+
+            try
+            {
+                var mods =
+                    _serverModService.GetInstalledMods(
+                        _preferences.ServerExecutablePath);
+
+                ModsCountText.Text =
+                    mods.Count.ToString(
+                        CultureInfo.InvariantCulture);
+
+                ModsStatusDot.Fill =
+                    GetBrush("SuccessColor");
+
+                if (mods.Count == 0)
+                {
+                    ModsStatusTitle.Text =
+                        "No PAK mods installed";
+
+                    ModsStatusDescription.Text =
+                        "The server Paks folder was found successfully.";
+
+                    NoModsText.Text =
+                        "PAK mods placed in Pal\\Content\\Paks will appear here.";
+
+                    return;
+                }
+
+                ModsListView.ItemsSource =
+                    mods;
+
+                ModsListView.Visibility =
+                    Visibility.Visible;
+
+                NoModsPanel.Visibility =
+                    Visibility.Collapsed;
+
+                int enabledCount =
+                    mods.Count(
+                        mod =>
+                            mod.IsEnabled);
+
+                ModsStatusTitle.Text =
+                    $"{mods.Count} mod{(mods.Count == 1 ? "" : "s")} found";
+
+                ModsStatusDescription.Text =
+                    $"{enabledCount} enabled • {mods.Count - enabledCount} disabled";
+            }
+            catch (Exception ex)
+            {
+                ModsStatusDot.Fill =
+                    GetBrush("WarningColor");
+
+                ModsStatusTitle.Text =
+                    "Mods unavailable";
+
+                ModsStatusDescription.Text =
+                    ex.Message;
+
+                NoModsText.Text =
+                    "Select a valid PalServer.exe on the Dashboard.";
+            }
+        }
+
+        private void UpdateModsPageForUnavailablePath()
+        {
+            ModsListView.ItemsSource =
+                null;
+
+            ModsListView.Visibility =
+                Visibility.Collapsed;
+
+            NoModsPanel.Visibility =
+                Visibility.Visible;
+
+            ModsStatusDot.Fill =
+                GetBrush("WarningColor");
+
+            ModsStatusTitle.Text =
+                "Mods not loaded";
+
+            ModsStatusDescription.Text =
+                "Select PalServer.exe on the Dashboard to locate the Paks folder.";
+
+            ModsCountText.Text =
+                "—";
+
+            SelectedModText.Text =
+                "Select a mod above to enable or disable it.";
+
+            EnableModButton.IsEnabled =
+                false;
+
+            DisableModButton.IsEnabled =
+                false;
+
+            RemoveModButton.IsEnabled =
+                false;
+        }
+
+        private void WireCrashRecoveryEvents()
+        {
+            EnableCrashRecoveryCheckBox.Checked += CrashRecoverySettings_Changed;
+            EnableCrashRecoveryCheckBox.Unchecked += CrashRecoverySettings_Changed;
+            CrashRecoveryDelayComboBox.SelectionChanged += CrashRecoverySettings_Changed;
+            CrashRecoveryMaxAttemptsComboBox.SelectionChanged += CrashRecoverySettings_Changed;
+        }
+
+        private void RestoreCrashRecoveryPreferences()
+        {
+            EnableCrashRecoveryCheckBox.IsChecked =
+                _preferences.CrashRecoveryEnabled;
+
+            SelectComboBoxItemByTag(
+                CrashRecoveryDelayComboBox,
+                Math.Max(
+                    10,
+                    _preferences.CrashRecoveryDelaySeconds)
+                    .ToString(
+                        CultureInfo.InvariantCulture));
+
+            SelectComboBoxItemByTag(
+                CrashRecoveryMaxAttemptsComboBox,
+                Math.Max(
+                    1,
+                    _preferences.CrashRecoveryMaxAttempts)
+                    .ToString(
+                        CultureInfo.InvariantCulture));
+
+            UpdateCrashRecoveryStatus();
+        }
+
+        private void CrashRecoverySettings_Changed(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (_preferences is null)
+            {
+                return;
+            }
+
+            _preferences.CrashRecoveryEnabled =
+                EnableCrashRecoveryCheckBox.IsChecked == true;
+
+            if (CrashRecoveryDelayComboBox.SelectedItem
+                    is ComboBoxItem delayItem &&
+                int.TryParse(
+                    delayItem.Tag?.ToString(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int delaySeconds))
+            {
+                _preferences.CrashRecoveryDelaySeconds =
+                    delaySeconds;
+            }
+
+            if (CrashRecoveryMaxAttemptsComboBox.SelectedItem
+                    is ComboBoxItem attemptsItem &&
+                int.TryParse(
+                    attemptsItem.Tag?.ToString(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int maxAttempts))
+            {
+                _preferences.CrashRecoveryMaxAttempts =
+                    maxAttempts;
+            }
+
+            _preferencesService.Save(
+                _preferences);
+
+            if (!_preferences.CrashRecoveryEnabled)
+            {
+                CancelCrashRecovery();
+            }
+
+            UpdateCrashRecoveryStatus();
+        }
+
+        private void ScheduleCrashRecovery()
+        {
+            if (!_preferences.CrashRecoveryEnabled ||
+                _intentionalServerStopInProgress ||
+                _crashRecoveryAttemptInProgress)
+            {
+                return;
+            }
+
+            _crashRecoveryAttemptCount =
+                0;
+
+            _crashRecoveryTargetTime =
+                DateTime.Now.AddSeconds(
+                    Math.Max(
+                        1,
+                        _preferences.CrashRecoveryDelaySeconds));
+
+            _crashRecoveryTimer.Start();
+
+            UpdateCrashRecoveryStatus();
+
+            AddActivity(
+                $"Automatic crash recovery scheduled for {_crashRecoveryTargetTime:h:mm:ss tt}.");
+        }
+
+        private void CancelCrashRecovery()
+        {
+            _crashRecoveryTimer.Stop();
+
+            _crashRecoveryTargetTime =
+                null;
+
+            _crashRecoveryAttemptCount =
+                0;
+
+            _crashRecoveryAttemptInProgress =
+                false;
+
+            UpdateCrashRecoveryStatus();
+        }
+
+        private async void CrashRecoveryTimer_Tick(
+            object? sender,
+            EventArgs e)
+        {
+            if (!_preferences.CrashRecoveryEnabled ||
+                _intentionalServerStopInProgress)
+            {
+                CancelCrashRecovery();
+                return;
+            }
+
+            if (_serverProcessService.IsRunning)
+            {
+                CancelCrashRecovery();
+                return;
+            }
+
+            if (!_crashRecoveryTargetTime.HasValue)
+            {
+                return;
+            }
+
+            TimeSpan remaining =
+                _crashRecoveryTargetTime.Value -
+                DateTime.Now;
+
+            if (remaining.TotalSeconds > 0)
+            {
+                CrashRecoveryStatusText.Text =
+                    $"Recovery attempt {_crashRecoveryAttemptCount + 1} will start in {Math.Ceiling(remaining.TotalSeconds):0} seconds.";
+
+                return;
+            }
+
+            if (_crashRecoveryAttemptInProgress)
+            {
+                return;
+            }
+
+            int maxAttempts =
+                Math.Max(
+                    1,
+                    _preferences.CrashRecoveryMaxAttempts);
+
+            if (_crashRecoveryAttemptCount >=
+                maxAttempts)
+            {
+                _crashRecoveryTimer.Stop();
+
+                _crashRecoveryTargetTime =
+                    null;
+
+                CrashRecoveryStatusText.Text =
+                    $"Automatic recovery stopped after {maxAttempts} failed attempt{(maxAttempts == 1 ? "" : "s")}.";
+
+                AddActivity(
+                    $"CRASH RECOVERY FAILED: maximum of {maxAttempts} attempt{(maxAttempts == 1 ? "" : "s")} reached.");
+
+                return;
+            }
+
+            _crashRecoveryAttemptInProgress =
+                true;
+
+            _crashRecoveryAttemptCount++;
+
+            try
+            {
+                SavePreferencesFromControls();
+
+                AddActivity(
+                    $"Crash recovery attempt {_crashRecoveryAttemptCount} of {maxAttempts} starting.");
+
+                _serverProcessService.StartServer(
+                    _preferences.ServerExecutablePath,
+                    _preferences.LaunchArguments);
+
+                await Task.Delay(
+                    2000);
+
+                if (!_serverProcessService.IsRunning)
+                {
+                    throw new InvalidOperationException(
+                        "PalServer exited immediately after the recovery start attempt.");
+                }
+
+                _previousServerRunning =
+                    true;
+
+                _crashRecoveryTimer.Stop();
+
+                _crashRecoveryTargetTime =
+                    null;
+
+                LastRecoveryText.Text =
+                    DateTime.Now.ToString(
+                        "MMM d, yyyy h:mm:ss tt",
+                        CultureInfo.CurrentCulture);
+
+                CrashRecoveryStatusText.Text =
+                    $"Recovered successfully on attempt {_crashRecoveryAttemptCount}.";
+
+                AddActivity(
+                    $"CRASH RECOVERY SUCCESS: PalServer restarted on attempt {_crashRecoveryAttemptCount}.");
+
+                UpdateServerProcessDisplay();
+                _ = RefreshLiveMetricsAsync();
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Crash recovery attempt {_crashRecoveryAttemptCount} failed: {ex.Message}");
+
+                if (_crashRecoveryAttemptCount <
+                    maxAttempts)
+                {
+                    _crashRecoveryTargetTime =
+                        DateTime.Now.AddSeconds(
+                            Math.Max(
+                                1,
+                                _preferences.CrashRecoveryDelaySeconds));
+
+                    CrashRecoveryStatusText.Text =
+                        $"Recovery attempt {_crashRecoveryAttemptCount} failed. Retrying shortly.";
+                }
+                else
+                {
+                    _crashRecoveryTargetTime =
+                        DateTime.Now;
+
+                    CrashRecoveryStatusText.Text =
+                        $"Recovery attempt {_crashRecoveryAttemptCount} failed.";
+                }
+            }
+            finally
+            {
+                _crashRecoveryAttemptInProgress =
+                    false;
+            }
+        }
+
+        private void UpdateCrashRecoveryStatus()
+        {
+            CrashCountText.Text =
+                _crashCount.ToString(
+                    CultureInfo.InvariantCulture);
+
+            if (!_preferences.CrashRecoveryEnabled)
+            {
+                CrashRecoveryStatusText.Text =
+                    "Crash recovery is disabled.";
+
+                return;
+            }
+
+            if (_crashRecoveryTargetTime.HasValue)
+            {
+                CrashRecoveryStatusText.Text =
+                    $"Crash recovery is armed. Next attempt: {_crashRecoveryTargetTime:h:mm:ss tt}.";
+
+                return;
+            }
+
+            CrashRecoveryStatusText.Text =
+                $"Crash recovery enabled • {_preferences.CrashRecoveryDelaySeconds}s delay • up to {_preferences.CrashRecoveryMaxAttempts} attempt{(_preferences.CrashRecoveryMaxAttempts == 1 ? "" : "s")}.";
         }
 
         private void WireMetricsEvents()
@@ -194,6 +922,11 @@ namespace PalWorldServerManager
                 LiveMetricsStatusText.Text =
                     $"REST API connected • Frame time {metrics.ServerFrameTime:0.00} ms";
 
+                _restApiFailureCount = 0;
+
+                EvaluateServerHealth(
+                    metrics);
+
                 if (logResult)
                 {
                     AddActivity(
@@ -206,6 +939,17 @@ namespace PalWorldServerManager
 
                 LiveMetricsStatusText.Text =
                     $"Metrics unavailable: {ex.Message}";
+
+                _restApiFailureCount++;
+
+                if (_serverProcessService.IsRunning &&
+                    _restApiFailureCount >= 2)
+                {
+                    UpdateServerHealthDisplay(
+                        "Warning",
+                        "PalServer is running, but the REST API is not responding.",
+                        true);
+                }
 
                 if (logResult)
                 {
@@ -737,11 +1481,225 @@ namespace PalWorldServerManager
                 "The player list will be available while the Palworld server is running.";
         }
 
+        private void ServerProcessService_OutputReceived(
+            object? sender,
+            string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            Dispatcher.Invoke(
+                () =>
+                {
+                    AddActivity(
+                        $"SERVER: {message}");
+                });
+        }
+
+        private void ServerProcessService_ErrorReceived(
+            object? sender,
+            string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            Dispatcher.Invoke(
+                () =>
+                {
+                    AddActivity(
+                        $"SERVER ERROR: {message}");
+                });
+        }
+
         private void WireConsoleEvents()
         {
             ConsoleListBox.ItemsSource = _activityLog;
             ClearConsoleButton.Click += ClearConsoleButton_Click;
             SendAnnouncementButton.Click += SendAnnouncementButton_Click;
+            RunConsoleCommandButton.Click += RunConsoleCommandButton_Click;
+            ConsoleCommandTextBox.KeyDown += ConsoleCommandTextBox_KeyDown;
+        }
+
+        private void ConsoleCommandTextBox_KeyDown(
+            object sender,
+            KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter)
+            {
+                return;
+            }
+
+            e.Handled = true;
+
+            RunConsoleCommandButton_Click(
+                RunConsoleCommandButton,
+                new RoutedEventArgs());
+        }
+
+        private async void RunConsoleCommandButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            string commandLine =
+                ConsoleCommandTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(
+                    commandLine))
+            {
+                return;
+            }
+
+            AddActivity(
+                $"> {commandLine}");
+
+            ConsoleCommandTextBox.Clear();
+
+            string[] parts =
+                commandLine.Split(
+                    ' ',
+                    2,
+                    StringSplitOptions.RemoveEmptyEntries);
+
+            string command =
+                parts[0].ToLowerInvariant();
+
+            string argument =
+                parts.Length > 1
+                    ? parts[1].Trim()
+                    : "";
+
+            try
+            {
+                switch (command)
+                {
+                    case "save":
+                        await ExecuteConsoleSaveAsync();
+                        break;
+
+                    case "announce":
+                        await ExecuteConsoleAnnouncementAsync(
+                            argument);
+                        break;
+
+                    case "players":
+                        await RefreshPlayersAsync(
+                            preserveSelection: true,
+                            logResult: true);
+                        break;
+
+                    case "restart":
+                        RestartServerButton_Click(
+                            RestartServerButton,
+                            new RoutedEventArgs());
+                        break;
+
+                    case "stop":
+                        StopServerButton_Click(
+                            StopServerButton,
+                            new RoutedEventArgs());
+                        break;
+
+                    case "clear":
+                        _activityLog.Clear();
+                        AddActivity(
+                            "Console cleared.");
+                        break;
+
+                    default:
+                        AddActivity(
+                            $"Unknown command: {command}");
+
+                        MessageBox.Show(
+                            "Unknown command.\n\n" +
+                            "Available commands:\n" +
+                            "save\n" +
+                            "announce <message>\n" +
+                            "players\n" +
+                            "restart\n" +
+                            "stop\n" +
+                            "clear",
+                            "Unknown Command",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Command failed: {ex.Message}");
+            }
+        }
+
+        private async Task ExecuteConsoleSaveAsync()
+        {
+            if (!_serverProcessService.IsRunning)
+            {
+                AddActivity(
+                    "Save command failed: server is offline.");
+
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            await _restApiService.SaveWorldAsync(
+                restApiPort,
+                adminPassword);
+
+            _lastWorldSaveTime =
+                DateTime.Now;
+
+            LastWorldSaveText.Text =
+                $"Last World Save: {_lastWorldSaveTime:MMM d, yyyy h:mm:ss tt}";
+
+            AddActivity(
+                $"World saved from Console at {_lastWorldSaveTime:h:mm:ss tt}.");
+        }
+
+        private async Task ExecuteConsoleAnnouncementAsync(
+            string message)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    message))
+            {
+                AddActivity(
+                    "Usage: announce <message>");
+
+                return;
+            }
+
+            if (!_serverProcessService.IsRunning)
+            {
+                AddActivity(
+                    "Announcement failed: server is offline.");
+
+                return;
+            }
+
+            if (!TryGetRestApiConnectionSettings(
+                    out int restApiPort,
+                    out string adminPassword))
+            {
+                return;
+            }
+
+            await _restApiService.AnnounceAsync(
+                restApiPort,
+                adminPassword,
+                message);
+
+            AddActivity(
+                $"Announcement sent from Console: {message}");
         }
 
         private async void SendAnnouncementButton_Click(object sender, RoutedEventArgs e)
@@ -872,6 +1830,14 @@ namespace PalWorldServerManager
             SelectComboBoxItemByTag(
                 ScheduledWorldBackupIntervalComboBox,
                 _preferences.ScheduledWorldBackupIntervalMinutes.ToString(
+                    CultureInfo.InvariantCulture));
+
+            EnableWorldBackupRetentionCheckBox.IsChecked =
+                _preferences.WorldBackupRetentionEnabled;
+
+            SelectComboBoxItemByTag(
+                WorldBackupRetentionComboBox,
+                _preferences.WorldBackupRetentionCount.ToString(
                     CultureInfo.InvariantCulture));
 
             SelectComboBoxItemByTag(
@@ -1022,6 +1988,10 @@ namespace PalWorldServerManager
             StartScheduledWorldBackupButton.Click += StartScheduledWorldBackupButton_Click;
             StopScheduledWorldBackupButton.Click += StopScheduledWorldBackupButton_Click;
 
+            EnableWorldBackupRetentionCheckBox.Checked += WorldBackupRetentionSettings_Changed;
+            EnableWorldBackupRetentionCheckBox.Unchecked += WorldBackupRetentionSettings_Changed;
+            WorldBackupRetentionComboBox.SelectionChanged += WorldBackupRetentionSettings_Changed;
+
             UpdateAutoSaveDisplay(false);
             UpdateRestartScheduleDisplay(false);
             UpdateScheduledBackupDisplay(false);
@@ -1032,6 +2002,78 @@ namespace PalWorldServerManager
                     Selector.SelectionChangedEvent,
                     Array.Empty<object>(),
                     Array.Empty<object>()));
+        }
+
+        private void WorldBackupRetentionSettings_Changed(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (_preferences is null)
+            {
+                return;
+            }
+
+            SaveWorldBackupRetentionPreferences();
+
+            try
+            {
+                _preferencesService.Save(
+                    _preferences);
+            }
+            catch
+            {
+                // Preference persistence failure is non-fatal here.
+            }
+        }
+
+        private void SaveWorldBackupRetentionPreferences()
+        {
+            _preferences.WorldBackupRetentionEnabled =
+                EnableWorldBackupRetentionCheckBox.IsChecked == true;
+
+            if (WorldBackupRetentionComboBox.SelectedItem
+                    is ComboBoxItem selectedItem &&
+                int.TryParse(
+                    selectedItem.Tag?.ToString(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int retentionCount) &&
+                retentionCount > 0)
+            {
+                _preferences.WorldBackupRetentionCount =
+                    retentionCount;
+            }
+        }
+
+        private void EnforceWorldBackupRetention()
+        {
+            if (!_preferences.WorldBackupRetentionEnabled ||
+                string.IsNullOrWhiteSpace(
+                    _settingsFilePath))
+            {
+                return;
+            }
+
+            try
+            {
+                IReadOnlyList<string> deleted =
+                    _worldBackupService.EnforceRetention(
+                        _settingsFilePath,
+                        Math.Max(
+                            1,
+                            _preferences.WorldBackupRetentionCount));
+
+                if (deleted.Count > 0)
+                {
+                    AddActivity(
+                        $"World backup retention removed {deleted.Count} old backup{(deleted.Count == 1 ? "" : "s")}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"World backup retention cleanup failed: {ex.Message}");
+            }
         }
 
         private void StartScheduledWorldBackupButton_Click(
@@ -1076,6 +2118,7 @@ namespace PalWorldServerManager
             }
 
             _scheduledWorldBackupTimer.Stop();
+            _crashRecoveryTimer.Stop();
 
             _scheduledWorldBackupTimer.Interval =
                 TimeSpan.FromMinutes(
@@ -1092,6 +2135,8 @@ namespace PalWorldServerManager
 
             _preferences.ScheduledWorldBackupIntervalMinutes =
                 intervalMinutes;
+
+            SaveWorldBackupRetentionPreferences();
 
             _preferencesService.Save(
                 _preferences);
@@ -1183,6 +2228,8 @@ namespace PalWorldServerManager
 
                 AddActivity(
                     $"Scheduled full world backup created: {System.IO.Path.GetFileName(backupPath)}");
+
+                EnforceWorldBackupRetention();
 
                 RefreshWorldBackupList();
             }
@@ -1696,6 +2743,9 @@ namespace PalWorldServerManager
                 AddActivity(
                     "Scheduled restart world save completed.");
 
+                _intentionalServerStopInProgress = true;
+                CancelCrashRecovery();
+
                 await _restApiService.ShutdownAsync(
                     restApiPort,
                     adminPassword,
@@ -1752,6 +2802,8 @@ namespace PalWorldServerManager
             finally
             {
                 _scheduledRestartInProgress = false;
+                _previousServerRunning = _serverProcessService.IsRunning;
+                _intentionalServerStopInProgress = false;
             }
         }
 
@@ -2142,6 +3194,8 @@ namespace PalWorldServerManager
         {
             _serverStatusTimer.Stop();
             _autoSaveTimer.Stop();
+            _serverProcessService.OutputReceived -= ServerProcessService_OutputReceived;
+            _serverProcessService.ErrorReceived -= ServerProcessService_ErrorReceived;
             _serverProcessService.Dispose();
             _restApiService.Dispose();
         }
@@ -2172,6 +3226,11 @@ namespace PalWorldServerManager
             {
                 RefreshBackupList();
                 RefreshWorldBackupList();
+            }
+
+            if (selectedPage == 6)
+            {
+                RefreshModsList();
             }
         }
 
@@ -2497,9 +3556,11 @@ namespace PalWorldServerManager
             try
             {
                 SavePreferencesFromControls();
+                CancelCrashRecovery();
                 _serverProcessService.StartServer(_preferences.ServerExecutablePath, _preferences.LaunchArguments);
                 AddActivity("Palworld server started.");
                 UpdateServerProcessDisplay();
+                _previousServerRunning = true;
                 _ = RefreshLiveMetricsAsync();
             }
             catch (Exception ex)
@@ -2531,6 +3592,9 @@ namespace PalWorldServerManager
             {
                 return;
             }
+
+            _intentionalServerStopInProgress = true;
+            CancelCrashRecovery();
 
             SetServerControlButtonsEnabled(false);
             AddActivity("Graceful server shutdown requested.");
@@ -2584,6 +3648,8 @@ namespace PalWorldServerManager
             finally
             {
                 UpdateServerProcessDisplay();
+                _previousServerRunning = _serverProcessService.IsRunning;
+                _intentionalServerStopInProgress = false;
             }
         }
 
@@ -2605,15 +3671,24 @@ namespace PalWorldServerManager
                 return;
             }
 
+            _intentionalServerStopInProgress = true;
+            CancelCrashRecovery();
+
             try
             {
                 _serverProcessService.ForceStopServer();
                 AddActivity("Server force stopped.");
                 UpdateServerProcessDisplay();
+                _previousServerRunning = false;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Could not force stop the server.\n\n{ex.Message}", "Force Stop Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _previousServerRunning = _serverProcessService.IsRunning;
+                _intentionalServerStopInProgress = false;
             }
         }
 
@@ -2640,6 +3715,9 @@ namespace PalWorldServerManager
             {
                 return;
             }
+
+            _intentionalServerStopInProgress = true;
+            CancelCrashRecovery();
 
             try
             {
@@ -2690,6 +3768,7 @@ namespace PalWorldServerManager
                 AddActivity("Palworld server restarted successfully.");
 
                 UpdateServerProcessDisplay();
+                _previousServerRunning = true;
                 _ = RefreshLiveMetricsAsync();
             }
             catch (Exception ex)
@@ -2704,6 +3783,8 @@ namespace PalWorldServerManager
             finally
             {
                 UpdateServerProcessDisplay();
+                _previousServerRunning = _serverProcessService.IsRunning;
+                _intentionalServerStopInProgress = false;
             }
         }
 
@@ -2800,7 +3881,45 @@ namespace PalWorldServerManager
 
         private void ServerStatusTimer_Tick(object? sender, EventArgs e)
         {
+            bool runningBeforeUpdate =
+                _previousServerRunning;
+
             UpdateServerProcessDisplay();
+
+            bool runningNow =
+                _serverProcessService.IsRunning;
+
+            if (runningBeforeUpdate &&
+                !runningNow &&
+                !_intentionalServerStopInProgress)
+            {
+                _lastCrashTime =
+                    DateTime.Now;
+
+                _crashCount++;
+
+                CrashCountText.Text =
+                    _crashCount.ToString(
+                        CultureInfo.InvariantCulture);
+
+                LastCrashText.Text =
+                    _lastCrashTime.Value.ToString(
+                        "MMM d, yyyy h:mm:ss tt",
+                        CultureInfo.CurrentCulture);
+
+                AddActivity(
+                    "PalServer stopped unexpectedly or exited.");
+
+                UpdateServerHealthDisplay(
+                    "Critical",
+                    "PalServer crashed or exited unexpectedly.",
+                    true);
+
+                ScheduleCrashRecovery();
+            }
+
+            _previousServerRunning =
+                runningNow;
 
             _serverStatusTickCount++;
 
@@ -2811,7 +3930,7 @@ namespace PalWorldServerManager
             }
 
             if (MainNavigationTabControl.SelectedIndex == 2 &&
-                _serverProcessService.IsRunning)
+                runningNow)
             {
                 _playerRefreshTickCount++;
 
@@ -2850,6 +3969,157 @@ namespace PalWorldServerManager
             RestartServerButton.IsEnabled = running;
             ForceStopServerButton.IsEnabled = running;
             SaveWorldButton.IsEnabled = running;
+        }
+
+        private void EvaluateServerHealth(
+            PalworldServerMetrics metrics)
+        {
+            if (!_serverProcessService.IsRunning)
+            {
+                UpdateServerHealthDisplay(
+                    "Critical",
+                    "PalServer is offline.",
+                    true);
+
+                return;
+            }
+
+            double cpuUsage =
+                _serverProcessService.GetCpuUsagePercent();
+
+            double memoryGb =
+                _serverProcessService.MemoryUsageBytes /
+                1024d /
+                1024d /
+                1024d;
+
+            if (metrics.ServerFps > 0 &&
+                metrics.ServerFps < 20)
+            {
+                UpdateServerHealthDisplay(
+                    "Critical",
+                    $"Server FPS is critically low at {metrics.ServerFps}.",
+                    true);
+
+                return;
+            }
+
+            if (cpuUsage >= 95)
+            {
+                UpdateServerHealthDisplay(
+                    "Critical",
+                    $"CPU usage is critically high at {cpuUsage:0.0}%.",
+                    true);
+
+                return;
+            }
+
+            if (memoryGb >= 24)
+            {
+                UpdateServerHealthDisplay(
+                    "Critical",
+                    $"PalServer memory usage is critically high at {memoryGb:0.0} GB.",
+                    true);
+
+                return;
+            }
+
+            if (metrics.ServerFps > 0 &&
+                metrics.ServerFps < 40)
+            {
+                UpdateServerHealthDisplay(
+                    "Warning",
+                    $"Server FPS is low at {metrics.ServerFps}.",
+                    true);
+
+                return;
+            }
+
+            if (cpuUsage >= 80)
+            {
+                UpdateServerHealthDisplay(
+                    "Warning",
+                    $"CPU usage is elevated at {cpuUsage:0.0}%.",
+                    true);
+
+                return;
+            }
+
+            if (memoryGb >= 16)
+            {
+                UpdateServerHealthDisplay(
+                    "Warning",
+                    $"PalServer memory usage is elevated at {memoryGb:0.0} GB.",
+                    true);
+
+                return;
+            }
+
+            UpdateServerHealthDisplay(
+                "Healthy",
+                $"Server is responding normally • {metrics.ServerFps} FPS • {metrics.CurrentPlayerCount}/{metrics.MaximumPlayerCount} players.",
+                false);
+        }
+
+        private void UpdateServerHealthDisplay(
+            string state,
+            string description,
+            bool warning)
+        {
+            bool stateChanged =
+                !string.Equals(
+                    _lastHealthState,
+                    state,
+                    StringComparison.OrdinalIgnoreCase);
+
+            _lastHealthState =
+                state;
+
+            ServerHealthStatusTitle.Text =
+                $"Server health: {state}";
+
+            ServerHealthStatusDescription.Text =
+                description;
+
+            ServerHealthStatusDot.Fill =
+                state switch
+                {
+                    "Healthy" =>
+                        GetBrush("SuccessColor"),
+
+                    "Warning" =>
+                        GetBrush("WarningColor"),
+
+                    "Critical" =>
+                        GetBrush("WarningColor"),
+
+                    _ =>
+                        GetBrush("MutedTextColor")
+                };
+
+            if (warning)
+            {
+                if (stateChanged)
+                {
+                    _lastHealthWarningTime =
+                        DateTime.Now;
+
+                    LastHealthWarningText.Text =
+                        $"Last Health Warning: {_lastHealthWarningTime:MMM d, yyyy h:mm:ss tt}";
+
+                    AddActivity(
+                        $"HEALTH {state.ToUpperInvariant()}: {description}");
+                }
+            }
+            else if (stateChanged &&
+                     string.Equals(
+                         state,
+                         "Healthy",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                AddActivity(
+                    "Server health returned to Healthy.");
+            }
         }
 
         private static string FormatMemory(long bytes)
@@ -2917,6 +4187,8 @@ namespace PalWorldServerManager
 
                 AddActivity(
                     $"World backup created: {System.IO.Path.GetFileName(backupPath)}");
+
+                EnforceWorldBackupRetention();
 
                 RefreshWorldBackupList();
 

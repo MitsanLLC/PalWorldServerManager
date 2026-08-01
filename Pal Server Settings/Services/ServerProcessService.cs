@@ -10,6 +10,11 @@ namespace PalWorldServerManager.Services
         private DateTime? _startedAt;
         private TimeSpan _previousProcessorTime;
         private DateTime _previousCpuCheckTime;
+        private bool _ownsProcess;
+
+        public event EventHandler<string>? OutputReceived;
+
+        public event EventHandler<string>? ErrorReceived;
 
         public bool IsRunning
         {
@@ -52,7 +57,8 @@ namespace PalWorldServerManager.Services
                     return TimeSpan.Zero;
                 }
 
-                return DateTime.Now - _startedAt.Value;
+                return DateTime.Now -
+                       _startedAt.Value;
             }
         }
 
@@ -197,7 +203,13 @@ namespace PalWorldServerManager.Services
                         false,
 
                     CreateNoWindow =
-                        false
+                        true,
+
+                    RedirectStandardOutput =
+                        true,
+
+                    RedirectStandardError =
+                        true
                 };
 
             Process process =
@@ -213,6 +225,12 @@ namespace PalWorldServerManager.Services
             process.Exited +=
                 ServerProcess_Exited;
 
+            process.OutputDataReceived +=
+                ServerProcess_OutputDataReceived;
+
+            process.ErrorDataReceived +=
+                ServerProcess_ErrorDataReceived;
+
             if (!process.Start())
             {
                 process.Dispose();
@@ -223,6 +241,9 @@ namespace PalWorldServerManager.Services
 
             _serverProcess =
                 process;
+
+            _ownsProcess =
+                true;
 
             try
             {
@@ -236,6 +257,22 @@ namespace PalWorldServerManager.Services
             }
 
             ResetCpuTracking();
+
+            try
+            {
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+            }
+            catch
+            {
+                // Some executables may not expose redirected output.
+                // Server monitoring still continues even if console
+                // output is unavailable.
+            }
+
+            OutputReceived?.Invoke(
+                this,
+                $"PalServer started with PID {process.Id}.");
         }
 
         public void AttachToRunningServer(
@@ -263,6 +300,9 @@ namespace PalWorldServerManager.Services
             _serverProcess =
                 matchingProcesses[0];
 
+            _ownsProcess =
+                false;
+
             _serverProcess.EnableRaisingEvents =
                 true;
 
@@ -288,6 +328,11 @@ namespace PalWorldServerManager.Services
             {
                 matchingProcesses[index].Dispose();
             }
+
+            OutputReceived?.Invoke(
+                this,
+                "Attached to an already-running PalServer process. " +
+                "Raw output cannot be captured retroactively for a process the manager did not start.");
         }
 
         public bool StopServer(
@@ -367,10 +412,44 @@ namespace PalWorldServerManager.Services
                 arguments);
         }
 
+        private void ServerProcess_OutputDataReceived(
+            object sender,
+            DataReceivedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    e.Data))
+            {
+                return;
+            }
+
+            OutputReceived?.Invoke(
+                this,
+                e.Data);
+        }
+
+        private void ServerProcess_ErrorDataReceived(
+            object sender,
+            DataReceivedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    e.Data))
+            {
+                return;
+            }
+
+            ErrorReceived?.Invoke(
+                this,
+                e.Data);
+        }
+
         private void ServerProcess_Exited(
             object? sender,
             EventArgs e)
         {
+            OutputReceived?.Invoke(
+                this,
+                "PalServer process exited.");
+
             ClearProcess();
         }
 
@@ -414,6 +493,12 @@ namespace PalWorldServerManager.Services
             _startedAt =
                 null;
 
+            bool ownedProcess =
+                _ownsProcess;
+
+            _ownsProcess =
+                false;
+
             ResetCpuTracking();
 
             if (process is null)
@@ -425,6 +510,15 @@ namespace PalWorldServerManager.Services
             {
                 process.Exited -=
                     ServerProcess_Exited;
+
+                if (ownedProcess)
+                {
+                    process.OutputDataReceived -=
+                        ServerProcess_OutputDataReceived;
+
+                    process.ErrorDataReceived -=
+                        ServerProcess_ErrorDataReceived;
+                }
 
                 process.Dispose();
             }

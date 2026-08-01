@@ -33,5 +33,16 @@
         public bool ScheduledWorldBackupEnabled { get; set; }
 
         public int ScheduledWorldBackupIntervalMinutes { get; set; } = 180;
+
+        public bool WorldBackupRetentionEnabled { get; set; } = true;
+
+        public int WorldBackupRetentionCount { get; set; } = 25;
+
+        // Automatic crash recovery
+        public bool CrashRecoveryEnabled { get; set; }
+
+        public int CrashRecoveryDelaySeconds { get; set; } = 30;
+
+        public int CrashRecoveryMaxAttempts { get; set; } = 3;
     }
 }
