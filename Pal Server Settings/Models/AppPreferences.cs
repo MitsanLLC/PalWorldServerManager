@@ -9,11 +9,26 @@
 
         public bool AttachToRunningServerOnStartup { get; set; } = true;
 
+        public bool HasCompletedInitialSetup { get; set; }
+
         public bool CheckForServerUpdatesBeforeStartup { get; set; }
 
         public bool StartWithWindows { get; set; }
 
         public string SteamCmdPath { get; set; } = "";
+
+        // Discord notifications
+        public bool DiscordNotificationsEnabled { get; set; }
+
+        public string DiscordWebhookUrl { get; set; } = "";
+
+        public bool NotifyOnCrash { get; set; } = true;
+
+        public bool NotifyOnRecovery { get; set; } = true;
+
+        public bool NotifyOnHealthWarning { get; set; } = true;
+
+        public bool NotifyOnServerOffline { get; set; } = true;
 
         // Last active Palworld configuration file
         public string LastSettingsFilePath { get; set; } = "";

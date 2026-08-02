@@ -278,11 +278,11 @@
 
                     <StackPanel>
 
-                        <TextBlock Text="PalWorld Server Manager"
+                        <TextBlock Text="Pal Server Hub"
                                    FontSize="12"
                                    FontWeight="SemiBold"/>
 
-                        <TextBlock Text="Version 0.2 UI Preview"
+                        <TextBlock Text="Version 0.9.0 Preview"
                                    Foreground="{StaticResource MutedTextColor}"
                                    FontSize="11"
                                    Margin="0,4,0,0"/>
@@ -299,17 +299,32 @@
                                FontSize="13"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Server Manager"
+                    <TextBlock Text="Server Hub"
                                FontSize="21"
                                FontWeight="SemiBold"
                                Margin="0,4,0,0"/>
 
-                    <TextBlock Text="Dedicated Server Tools"
+                    <TextBlock Text="Palworld Dedicated Server Management"
                                Foreground="{StaticResource MutedTextColor}"
                                FontSize="12"
                                Margin="0,4,0,0"/>
 
                 </StackPanel>
+
+                <!-- Help stays pinned to the bottom of the left navigation -->
+                <Button DockPanel.Dock="Bottom"
+                        Content="?   Help"
+                        Tag="7"
+                        Margin="0,0,0,12"
+                        Style="{StaticResource NavigationButtonStyle}"
+                        Click="NavigationButton_Click"/>
+
+                <Button DockPanel.Dock="Bottom"
+                        Content="♥   Support Development"
+                        Margin="0,0,0,6"
+                        ToolTip="Support Pal Server Hub development on Ko-fi."
+                        Style="{StaticResource NavigationButtonStyle}"
+                        Click="SupportDevelopmentButton_Click"/>
 
                 <!-- Navigation -->
                 <StackPanel>
@@ -1026,7 +1041,7 @@
                                               Margin="0,0,0,10"/>
 
                                     <CheckBox x:Name="StartWithWindowsCheckBox"
-                                              Content="Start Palworld Server Manager when Windows starts"
+                                              Content="Start Pal Server Hub when Windows starts"
                                               Margin="0,0,0,18"/>
 
 
@@ -1335,6 +1350,87 @@
 
                             <!-- Advanced tab -->
 
+
+
+                            <!-- Notifications tab -->
+                            <TabItem Header="Notifications">
+
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+
+                                    <Border Style="{StaticResource CardStyle}"
+                                            Margin="15">
+
+                                        <StackPanel>
+
+                                            <TextBlock Text="Discord Notifications"
+                                                       FontSize="20"
+                                                       FontWeight="SemiBold"/>
+
+                                            <TextBlock Text="Send server alerts to a Discord channel using a webhook. The Dashboard remains unchanged."
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,6,0,18"/>
+
+                                            <CheckBox x:Name="EnableDiscordNotificationsCheckBox"
+                                                      Content="Enable Discord notifications"
+                                                      Margin="0,0,0,16"/>
+
+                                            <TextBlock Text="Discord Webhook URL"/>
+
+                                            <Grid Margin="0,6,0,16">
+
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <PasswordBox x:Name="DiscordWebhookPasswordBox"
+                                                             MinHeight="38"
+                                                             Padding="8"
+                                                             Margin="0,0,10,0"
+                                                             ToolTip="Paste the Discord webhook URL"/>
+
+                                                <Button x:Name="TestDiscordWebhookButton"
+                                                        Grid.Column="1"
+                                                        Content="Send Test"
+                                                        Width="110"
+                                                        Height="38"
+                                                        Style="{StaticResource SecondaryButtonStyle}"/>
+
+                                            </Grid>
+
+                                            <TextBlock Text="Notify me when"
+                                                       FontSize="16"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,4,0,10"/>
+
+                                            <CheckBox x:Name="NotifyOnCrashCheckBox"
+                                                      Content="PalServer crashes or exits unexpectedly"
+                                                      Margin="0,0,0,8"/>
+
+                                            <CheckBox x:Name="NotifyOnRecoveryCheckBox"
+                                                      Content="Automatic crash recovery succeeds or fails"
+                                                      Margin="0,0,0,8"/>
+
+                                            <CheckBox x:Name="NotifyOnHealthWarningCheckBox"
+                                                      Content="Server health changes to Warning or Critical"
+                                                      Margin="0,0,0,8"/>
+
+                                            <CheckBox x:Name="NotifyOnServerOfflineCheckBox"
+                                                      Content="Server becomes offline unexpectedly"
+                                                      Margin="0,0,0,16"/>
+
+                                            <TextBlock x:Name="DiscordNotificationStatusText"
+                                                       Text="Discord notifications are disabled."
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       TextWrapping="Wrap"/>
+
+                                        </StackPanel>
+
+                                    </Border>
+
+                                </ScrollViewer>
+                            </TabItem>
 
                             <!-- Recovery tab -->
                             <TabItem Header="Recovery">
@@ -1866,8 +1962,15 @@
                                           VerticalAlignment="Center"
                                           Margin="0,0,18,0"/>
 
+                                <Button x:Name="OpenLogsFolderButton"
+                                        Content="Open Logs Folder"
+                                        Width="145"
+                                        Height="40"
+                                        Margin="0,0,10,0"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+
                                 <Button x:Name="ClearConsoleButton"
-                                        Content="Clear Console"
+                                        Content="Clear Display"
                                         Width="130"
                                         Height="40"
                                         Style="{StaticResource SecondaryButtonStyle}"/>
@@ -3186,6 +3289,155 @@
                     </Grid>
                 </TabItem>
 
+
+
+                <!-- HELP -->
+                <TabItem>
+                    <Grid Margin="30">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="Help &amp; Guides"
+                                       FontSize="29"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Step-by-step help for setting up, running, and troubleshooting your Palworld dedicated server."
+                                       Foreground="{StaticResource MutedTextColor}"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="245"/>
+                                <ColumnDefinition Width="18"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource CardStyle}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <TextBlock Text="GUIDES"
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,10"/>
+
+                                        <Button Content="Initial Setup" Tag="InitialSetup" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Server Controls" Tag="ServerControls" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Settings File" Tag="SettingsFile" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="SteamCMD Updates" Tag="SteamCmd" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Discord Notifications" Tag="Discord" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Crash Recovery" Tag="Recovery" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Backups" Tag="Backups" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Scheduler" Tag="Scheduler" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Players &amp; Admin" Tag="Players" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Console Commands" Tag="Console" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Mods" Tag="Mods" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="Troubleshooting" Tag="Troubleshooting" Height="40" Margin="0,0,0,7" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                        <Button Content="About" Tag="About" Height="40" Style="{StaticResource SecondaryButtonStyle}" Click="HelpTopicButton_Click"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource CardStyle}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Margin="0,0,0,14">
+                                        <TextBlock x:Name="HelpTopicTitleText"
+                                                   Text="Initial Setup"
+                                                   FontSize="22"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="HelpTopicSummaryText"
+                                                   Text="Set up Palworld Dedicated Server and connect it to Pal Server Hub."
+                                                   Foreground="{StaticResource MutedTextColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
+
+                                    <ScrollViewer Grid.Row="1"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <TextBlock x:Name="HelpTopicBodyText"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="14"
+                                                   LineHeight="22"/>
+                                    </ScrollViewer>
+
+                                    <Border x:Name="AboutActionsPanel"
+                                            Grid.Row="2"
+                                            Visibility="Collapsed"
+                                            Margin="0,18,0,0"
+                                            Padding="0,16,0,0"
+                                            BorderBrush="#334155"
+                                            BorderThickness="0,1,0,0">
+
+                                        <StackPanel>
+
+                                            <Image Source="Assets/PalServerHubLogo.png"
+                                                   Height="72"
+                                                   Stretch="Uniform"
+                                                   HorizontalAlignment="Left"
+                                                   Margin="0,0,0,14"/>
+
+                                            <TextBlock Text="Developed by Stancean"
+                                                       FontSize="15"
+                                                       FontWeight="SemiBold"/>
+
+                                            <TextBlock Text="A Mitsan LLC product"
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       Margin="0,3,0,12"/>
+
+                                            <WrapPanel>
+
+                                                <Button x:Name="PalServerHubWebsiteButton"
+                                                        Content="Pal Server Hub Website"
+                                                        Width="175"
+                                                        Height="38"
+                                                        Margin="0,0,10,10"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="PalServerHubWebsiteButton_Click"/>
+
+                                                <Button x:Name="StanceanWebsiteButton"
+                                                        Content="Stancean Website"
+                                                        Width="145"
+                                                        Height="38"
+                                                        Margin="0,0,10,10"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="StanceanWebsiteButton_Click"/>
+
+                                                <Button x:Name="SupportDevelopmentButton"
+                                                        Content="Support Development"
+                                                        Width="165"
+                                                        Height="38"
+                                                        Margin="0,0,0,10"
+                                                        ToolTip="Support Pal Server Hub development on Ko-fi."
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="SupportDevelopmentButton_Click"/>
+
+                                            </WrapPanel>
+
+                                            <TextBlock Text="Pal Server Hub is an independent community tool and is not affiliated with or endorsed by Pocketpair."
+                                                       Foreground="{StaticResource MutedTextColor}"
+                                                       FontSize="11"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,5,0,0"/>
+
+                                        </StackPanel>
+
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
 
             </TabControl>
 

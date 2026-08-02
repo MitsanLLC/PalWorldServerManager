@@ -1,0 +1,26 @@
+<Project>
+	<PropertyGroup>
+
+		<Version>0.9.0</Version>
+		<VersionPrefix>0.9.0</VersionPrefix>
+
+		<AssemblyVersion>0.9.0.0</AssemblyVersion>
+		<FileVersion>0.9.0.0</FileVersion>
+		<InformationalVersion>0.9.0-preview</InformationalVersion>
+
+		<Product>Pal Server Hub</Product>
+
+		<Authors>Stancean</Authors>
+
+		<Company>Mitsan LLC</Company>
+
+		<Description>
+			Palworld Dedicated Server Management
+		</Description>
+
+		<Copyright>
+			Copyright © 2026 Mitsan LLC
+		</Copyright>
+
+	</PropertyGroup>
+</Project>

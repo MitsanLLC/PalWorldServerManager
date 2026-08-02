@@ -8,6 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>PalWorldServerManager</AssemblyName>
+	  
+	<ApplicationIcon>Assets\PalServerHub.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

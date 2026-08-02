@@ -4,9 +4,11 @@ using PalWorldServerManager.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -25,6 +27,8 @@ namespace PalWorldServerManager
         private readonly ServerModService _serverModService = new();
         private readonly SteamCmdService _steamCmdService = new();
         private readonly WindowsStartupService _windowsStartupService = new();
+        private readonly DiscordWebhookService _discordWebhookService = new();
+        private readonly PersistentLogService _persistentLogService = new();
         private readonly ServerProcessService _serverProcessService = new();
         private readonly AppPreferencesService _preferencesService = new();
         private readonly PalworldRestApiService _restApiService = new();
@@ -72,6 +76,7 @@ namespace PalWorldServerManager
         public MainWindow()
         {
             InitializeComponent();
+            ShowHelpTopic("InitialSetup");
 
             _preferences = _preferencesService.Load();
             PopulatePreferencesControls();
@@ -88,6 +93,21 @@ namespace PalWorldServerManager
 
             _steamCmdService.OutputReceived += SteamCmdService_OutputReceived;
             _steamCmdService.ErrorReceived += SteamCmdService_ErrorReceived;
+
+            TestDiscordWebhookButton.Click += TestDiscordWebhookButton_Click;
+            EnableDiscordNotificationsCheckBox.Checked += DiscordNotificationSettings_Changed;
+            EnableDiscordNotificationsCheckBox.Unchecked += DiscordNotificationSettings_Changed;
+            NotifyOnCrashCheckBox.Checked += DiscordNotificationSettings_Changed;
+            NotifyOnCrashCheckBox.Unchecked += DiscordNotificationSettings_Changed;
+            NotifyOnRecoveryCheckBox.Checked += DiscordNotificationSettings_Changed;
+            NotifyOnRecoveryCheckBox.Unchecked += DiscordNotificationSettings_Changed;
+            NotifyOnHealthWarningCheckBox.Checked += DiscordNotificationSettings_Changed;
+            NotifyOnHealthWarningCheckBox.Unchecked += DiscordNotificationSettings_Changed;
+            NotifyOnServerOfflineCheckBox.Checked += DiscordNotificationSettings_Changed;
+            NotifyOnServerOfflineCheckBox.Unchecked += DiscordNotificationSettings_Changed;
+            DiscordWebhookPasswordBox.PasswordChanged += DiscordWebhookPasswordBox_PasswordChanged;
+
+            UpdateDiscordNotificationStatus();
 
             _serverProcessService.OutputReceived += ServerProcessService_OutputReceived;
             _serverProcessService.ErrorReceived += ServerProcessService_ErrorReceived;
@@ -141,8 +161,98 @@ namespace PalWorldServerManager
             WireCrashRecoveryEvents();
             RestoreCrashRecoveryPreferences();
 
-            AddActivity("PalWorld Server Manager started.");
+            AddActivity("Pal Server Hub started.");
+            Loaded += MainWindow_FirstRunLoaded;
             Closed += MainWindow_Closed;
+        }
+
+        private void MainWindow_FirstRunLoaded(
+            object sender,
+            RoutedEventArgs e)
+        {
+            Loaded -= MainWindow_FirstRunLoaded;
+
+            if (_preferences.HasCompletedInitialSetup)
+            {
+                return;
+            }
+
+            SetupWizardWindow wizard =
+                new SetupWizardWindow(
+                    _preferences)
+                {
+                    Owner = this
+                };
+
+            bool? result =
+                wizard.ShowDialog();
+
+            if (result != true)
+            {
+                AddActivity(
+                    "Initial setup wizard skipped.");
+                return;
+            }
+
+            _preferences.ServerExecutablePath =
+                wizard.ServerExecutablePath;
+
+            _preferences.LastSettingsFilePath =
+                wizard.SettingsFilePath;
+
+            _preferences.SteamCmdPath =
+                wizard.SteamCmdPath;
+
+            _preferences.AttachToRunningServerOnStartup =
+                wizard.AttachToRunningServer;
+
+            _preferences.CheckForServerUpdatesBeforeStartup =
+                wizard.CheckForUpdatesBeforeStartup;
+
+            _preferences.StartWithWindows =
+                wizard.StartWithWindows;
+
+            _preferences.HasCompletedInitialSetup =
+                true;
+
+            _preferencesService.Save(
+                _preferences);
+
+            if (wizard.StartWithWindows)
+            {
+                try
+                {
+                    _windowsStartupService.SetStartWithWindows(
+                        true);
+                }
+                catch (Exception ex)
+                {
+                    AddActivity(
+                        $"Could not enable Windows startup during initial setup: {ex.Message}");
+                }
+            }
+
+            PopulatePreferencesControls();
+
+            if (!string.IsNullOrWhiteSpace(
+                    _preferences.LastSettingsFilePath) &&
+                System.IO.File.Exists(
+                    _preferences.LastSettingsFilePath))
+            {
+                try
+                {
+                    LoadSettingsFile(
+                        _preferences.LastSettingsFilePath);
+                }
+                catch (Exception ex)
+                {
+                    AddActivity(
+                        $"Initial settings load failed: {ex.Message}");
+                }
+            }
+
+            AddActivity(
+                "Initial setup completed.");
         }
 
         private void WireBackupEvents()
@@ -760,6 +870,12 @@ namespace PalWorldServerManager
                 AddActivity(
                     $"CRASH RECOVERY FAILED: maximum of {maxAttempts} attempt{(maxAttempts == 1 ? "" : "s")} reached.");
 
+                if (_preferences.NotifyOnRecovery)
+                {
+                    _ = SendDiscordNotificationAsync(
+                        $"❌ PalServer crash recovery failed after {maxAttempts} attempt{(maxAttempts == 1 ? "" : "s")}.");
+                }
+
                 return;
             }
 
@@ -804,6 +920,12 @@ namespace PalWorldServerManager
 
                 AddActivity(
                     $"CRASH RECOVERY SUCCESS: PalServer restarted on attempt {_crashRecoveryAttemptCount}.");
+
+                if (_preferences.NotifyOnRecovery)
+                {
+                    _ = SendDiscordNotificationAsync(
+                        $"✅ PalServer recovered successfully on attempt {_crashRecoveryAttemptCount}.");
+                }
 
                 UpdateServerProcessDisplay();
                 _ = RefreshLiveMetricsAsync();
@@ -1705,6 +1827,7 @@ namespace PalWorldServerManager
         private void WireConsoleEvents()
         {
             ConsoleListBox.ItemsSource = _activityLog;
+            OpenLogsFolderButton.Click += OpenLogsFolderButton_Click;
             ClearConsoleButton.Click += ClearConsoleButton_Click;
             SendAnnouncementButton.Click += SendAnnouncementButton_Click;
             RunConsoleCommandButton.Click += RunConsoleCommandButton_Click;
@@ -1949,6 +2072,22 @@ namespace PalWorldServerManager
             }
         }
 
+        private void OpenLogsFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _persistentLogService.OpenLogsFolder();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not open the logs folder.\n\n" + ex.Message,
+                    "Logs Folder Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
         private void ClearConsoleButton_Click(object sender, RoutedEventArgs e)
         {
             _activityLog.Clear();
@@ -1959,6 +2098,15 @@ namespace PalWorldServerManager
         {
             string entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
             _activityLog.Add(entry);
+
+            try
+            {
+                _persistentLogService.Write(message);
+            }
+            catch
+            {
+                // Logging must never interrupt server management.
+            }
 
             if (ConsoleAutoScrollCheckBox.IsChecked == true &&
                 _activityLog.Count > 0)
@@ -3385,7 +3533,488 @@ namespace PalWorldServerManager
             _steamCmdService.ErrorReceived -= SteamCmdService_ErrorReceived;
             _serverProcessService.Dispose();
             _steamCmdService.Dispose();
+            _discordWebhookService.Dispose();
+            _persistentLogService.Dispose();
             _restApiService.Dispose();
+        }
+
+        private void HelpTopicButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button &&
+                button.Tag is string topic)
+            {
+                ShowHelpTopic(topic);
+            }
+        }
+
+        private void ShowHelpTopic(string topic)
+        {
+            string title;
+            string summary;
+            string body;
+
+            switch (topic)
+            {
+                case "ServerControls":
+                    title = "Server Controls";
+                    summary = "Start, stop, restart, and configure how the manager handles PalServer.";
+                    body =
+@"STARTING THE SERVER
+
+1. On the Dashboard, confirm PalServer.exe is selected under Server Controls.
+2. Click Start Server.
+3. The manager launches PalServer and begins monitoring it.
+4. Confirm Server Health becomes Healthy and live metrics begin populating.
+
+STOP SERVER
+Use Stop Server whenever possible. This performs the graceful shutdown flow.
+
+RESTART SERVER
+Use Restart Server for a controlled restart.
+
+FORCE STOP
+Use Force Stop only if PalServer will not shut down normally. Force stopping can risk unsaved world data.
+
+STARTUP OPTIONS
+
+• Attach to an already-running Palworld server when the app starts
+  Lets the manager attach to a PalServer process that was already running.
+
+• Check for server updates before startup
+  Runs SteamCMD before PalServer starts.
+
+• Start Pal Server Hub when Windows starts
+  Starts the manager when the current Windows user signs in.";
+                    break;
+
+                case "SettingsFile":
+                    title = "Settings File";
+                    summary = "Load, edit, save, and automatically reload PalWorldSettings.ini.";
+                    body =
+@"LOADING PALWORLDSETTINGS.INI
+
+1. Open Settings.
+2. Click Load.
+3. Browse to the active PalWorldSettings.ini.
+4. Select the file.
+5. The manager reads OptionSettings and fills the Server Settings tabs.
+6. The manager remembers the last settings file for future launches.
+
+EDITING
+Use the Server, Gameplay, PvP & Hardcore, Bases & Guilds, Network, Notifications, Recovery, and Advanced tabs.
+
+SAVING
+1. Make your changes.
+2. Click Save.
+3. The manager creates a backup before replacing the settings file.
+4. Restart PalServer when a changed option requires a restart.";
+                    break;
+
+                case "SteamCmd":
+                    title = "SteamCMD Updates";
+                    summary = "Optionally validate and update Palworld Dedicated Server before startup.";
+                    body =
+@"SETUP
+
+1. Download and extract SteamCMD.
+2. A simple location is:
+   C:\SteamCMD\steamcmd.exe
+3. Run steamcmd.exe once manually.
+4. At the Steam> prompt, type:
+   quit
+5. Open Settings > Advanced > SteamCMD.
+6. Click Browse and select steamcmd.exe.
+7. On Dashboard > Server Controls, enable Check for server updates before startup.
+
+When enabled, the manager runs SteamCMD before launching PalServer, validates/updates the dedicated server, and writes SteamCMD output to Console.";
+                    break;
+
+                case "Discord":
+                    title = "Discord Notifications";
+                    summary = "Send crash, recovery, health, and offline alerts to a Discord channel.";
+                    body =
+@"CREATE A DISCORD WEBHOOK
+
+1. Open your Discord server.
+2. Select the channel where Palworld alerts should appear.
+3. Click the channel gear icon (Edit Channel).
+4. Select Integrations.
+5. Select Webhooks.
+6. Click New Webhook.
+7. Name it, for example:
+   Pal Server Hub
+8. Confirm the destination channel.
+9. Click Copy Webhook URL.
+
+Treat the webhook URL like a password. Anyone who has it can post through the webhook. Do not publish it or commit it to Git.
+
+CONFIGURE THE MANAGER
+
+1. Open Settings > Notifications.
+2. Enable Discord notifications.
+3. Paste the webhook URL.
+4. Click Send Test.
+5. Confirm the test message appears in Discord.
+6. Select the alerts you want:
+   • Unexpected crash/exit
+   • Recovery success/failure
+   • Warning/Critical health
+   • Unexpected offline events
+
+If Webhooks is unavailable in Discord, you may need the Manage Webhooks permission.";
+                    break;
+
+                case "Recovery":
+                    title = "Crash Recovery";
+                    summary = "Automatically restart PalServer after an unexpected crash.";
+                    body =
+@"1. Open Settings > Recovery.
+2. Enable automatic crash recovery.
+3. Choose the Restart Delay.
+4. Choose the Maximum Attempts.
+5. Save your preferences.
+
+The manager tracks crash count, recovery status, and last successful recovery.
+
+Intentional Stop, Force Stop, manual Restart, and scheduled Restart are not treated as crashes.";
+                    break;
+
+                case "Backups":
+                    title = "Backups";
+                    summary = "Protect the server world with manual and automatic backups.";
+                    body =
+@"Use the Backups page to manage world backups.
+
+AUTOMATIC BACKUPS
+1. Enable automatic backups.
+2. Choose the desired interval.
+3. Configure retention so old backups do not accumulate indefinitely.
+4. Keep the manager running for scheduled automatic backup operations.
+
+Create a backup before major settings or mod changes.";
+                    break;
+
+                case "Scheduler":
+                    title = "Scheduler";
+                    summary = "Schedule recurring server administration such as controlled restarts.";
+                    body =
+@"Use Scheduler to configure recurring server operations.
+
+Scheduled restarts use the manager's controlled restart flow and are not treated as crashes.
+
+Review the scheduled time and recurrence before enabling a task.";
+                    break;
+
+                case "Players":
+                    title = "Players & Admin";
+                    summary = "View connected players and perform REST API administrative actions.";
+                    body =
+@"1. Start PalServer.
+2. Confirm the REST API is enabled and connected.
+3. Open Players.
+4. Refresh the player list.
+5. Select a player for an available administrative action.
+
+Actions such as kicking a player are sent through the Palworld REST API.
+
+If players do not load, verify REST API settings, the administrator password, and the REST API port.";
+                    break;
+
+                case "Console":
+                    title = "Console Commands";
+                    summary = "View PalServer output and run common manager/admin commands.";
+                    body =
+@"When the manager launches PalServer, server output is captured in Console.
+
+If the manager attaches to an already-running PalServer, it cannot retrieve console output from before it attached.
+
+COMMANDS
+
+save
+Saves the world.
+
+announce <message>
+Sends an announcement.
+
+players
+Refreshes/lists online players.
+
+restart
+Performs the safe restart flow.
+
+stop
+Performs the graceful stop flow.
+
+clear
+Clears the manager Console.
+
+SteamCMD activity is also written to Console.
+
+PERSISTENT LOGS
+
+Manager activity is also saved to daily log files.
+
+Click Console > Open Logs Folder to view them.
+
+Example:
+2026-08-01.log
+
+Clear Display only clears the current on-screen Console. It does not delete the saved daily log.";
+                    break;
+
+                case "Mods":
+                    title = "Mods";
+                    summary = "Manage supported server mods separately from the Dashboard.";
+                    body =
+@"RECOMMENDED PROCESS
+
+1. Back up the server.
+2. Stop or restart PalServer when required by the mod.
+3. Install/enable or remove/disable the mod.
+4. Start the server and verify it loads normally.
+5. Recheck mod compatibility after Palworld updates.";
+                    break;
+
+                case "Troubleshooting":
+                    title = "Troubleshooting";
+                    summary = "Common PalServer, REST API, port, and SteamCMD problems.";
+                    body =
+@"PORT ALREADY IN USE
+
+1. Stop PalServer.
+2. Check Task Manager for another PalServer process.
+3. If needed, use netstat to identify the PID using the port.
+4. Close the duplicate/stale process.
+5. Start PalServer again.
+
+REST API UNAVAILABLE
+• Confirm PalServer is running.
+• Confirm REST API is enabled.
+• Confirm the REST API port.
+• Confirm the administrator password.
+• Review Startup Diagnostics and Console.
+
+STEAMCMD UPDATE FAILS
+• Confirm steamcmd.exe exists at Settings > Advanced.
+• Run SteamCMD manually once if it has never initialized.
+• Review STEAMCMD output in Console.
+
+SERVER EXITS DURING STARTUP
+Review Startup Diagnostics and Console for port conflicts, missing files, fatal errors, or mod failures.
+
+PERSISTENT LOGS
+Use Console > Open Logs Folder to review daily logs from earlier sessions. Clear Display does not delete saved log files.";
+                    break;
+
+                case "About":
+                    title = "About Pal Server Hub";
+                    summary = "Product, developer, version, and release information.";
+                    body =
+$@"PAL SERVER HUB
+
+Version: {GetApplicationVersion()}
+Release channel: Preview
+Target release: v0.9.0
+
+Palworld Dedicated Server Management
+PAL SERVER MANAGEMENT MADE SIMPLE
+
+Product website:
+palworldserverhub.com
+
+Short domain:
+palserverhub.com
+
+Developer:
+Stancean
+stancean.com
+
+Legal company:
+Mitsan LLC
+
+RELEASE FOCUS
+
+• Local server start/stop/restart controls
+• Live health and REST API metrics
+• Player administration
+• Console and persistent logs
+• Backups and scheduled administration
+• Mod management
+• Crash recovery
+• Discord notifications
+• Optional SteamCMD update-before-start
+• Windows startup integration
+• Built-in Help & Guides
+
+DATA LOCATIONS
+
+Persistent logs:
+%LOCALAPPDATA%\PalWorldServerManager\Logs
+
+Manager preferences are stored locally by the application and should not be committed to source control.
+
+This is a preview release. Test it on a non-critical server before wider distribution.";
+                    break;
+
+                case "InitialSetup":
+                default:
+                    title = "Initial Setup";
+                    summary = "Set up Palworld Dedicated Server and connect it to Pal Server Hub.";
+                    body =
+@"1. INSTALL PALWORLD DEDICATED SERVER
+
+Install Palworld Dedicated Server and start it once so the server folders and default files are created. Then stop it.
+
+2. SELECT PALSERVER.EXE
+
+Find PalServer.exe in the dedicated server installation.
+
+In Pal Server Hub:
+• Go to Dashboard > Server Controls.
+• Browse to PalServer.exe.
+• Save Preferences.
+
+3. LOCATE PALWORLDSETTINGS.INI
+
+The active settings file is normally under:
+Pal\Saved\Config\WindowsServer\PalWorldSettings.ini
+
+If the file/configuration folder has not been created yet, run PalServer once and stop it.
+
+4. LOAD THE SETTINGS FILE
+
+• Open Settings.
+• Click Load.
+• Select PalWorldSettings.ini.
+• Confirm the manager reports that the settings file loaded.
+
+The manager remembers the last settings file.
+
+5. CONFIGURE THE SERVER
+
+Under Settings > Server, configure:
+• Server name
+• Description
+• Maximum players
+• Administrator password
+• Optional server password
+
+Review Gameplay, PvP & Hardcore, Bases & Guilds, and Network as needed.
+
+6. CONFIGURE REST API
+
+The manager uses Palworld's REST API for live metrics and player administration.
+
+• Open Settings > Network.
+• Enable REST API.
+• Confirm the REST API port.
+• Make sure the administrator password is configured.
+• Save the settings.
+
+7. SAVE AND START
+
+Click Save. The manager creates a backup before writing the updated settings.
+
+Start or restart PalServer so startup-read settings take effect.
+
+8. VERIFY OPERATION
+
+After startup:
+• Server status should show running.
+• Server Health should become Healthy.
+• Live metrics should populate.
+• Startup Diagnostics should remain hidden during a normal startup.
+
+9. OPTIONAL FEATURES
+
+After the basic server works, configure:
+• Notifications
+• Crash Recovery
+• SteamCMD
+• Backups
+• Scheduler
+• Mods
+
+For an Internet-accessible server, configure the required firewall/router rules for your environment and expose only the ports you actually need.";
+                    break;
+            }
+
+            HelpTopicTitleText.Text = title;
+            HelpTopicSummaryText.Text = summary;
+            HelpTopicBodyText.Text = body;
+
+            AboutActionsPanel.Visibility =
+                string.Equals(
+                    topic,
+                    "About",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+        }
+
+        private void PalServerHubWebsiteButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            OpenWebsite(
+                "https://palworldserverhub.com");
+        }
+
+        private void StanceanWebsiteButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            OpenWebsite(
+                "https://stancean.com");
+        }
+
+        private void SupportDevelopmentButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            OpenWebsite(
+                "https://ko-fi.com/mitsanllc");
+        }
+
+        private void OpenWebsite(
+            string url)
+        {
+            try
+            {
+                Process.Start(
+                    new ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not open the website.\\n\\n" +
+                    ex.Message,
+                    "Website Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private static string GetApplicationVersion()
+        {
+            Assembly assembly =
+                Assembly.GetExecutingAssembly();
+
+            AssemblyInformationalVersionAttribute? informational =
+                assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+
+            if (!string.IsNullOrWhiteSpace(
+                    informational?.InformationalVersion))
+            {
+                return informational.InformationalVersion;
+            }
+
+            return assembly.GetName().Version?.ToString()
+                   ?? "0.9.0";
         }
 
         private void NavigationButton_Click(object sender, RoutedEventArgs e)
@@ -3647,6 +4276,174 @@ namespace PalWorldServerManager
             CheckForServerUpdatesCheckBox.IsChecked = _preferences.CheckForServerUpdatesBeforeStartup;
             StartWithWindowsCheckBox.IsChecked = _preferences.StartWithWindows;
             SteamCmdPathTextBox.Text = _preferences.SteamCmdPath;
+
+            EnableDiscordNotificationsCheckBox.IsChecked =
+                _preferences.DiscordNotificationsEnabled;
+
+            DiscordWebhookPasswordBox.Password =
+                _preferences.DiscordWebhookUrl;
+
+            NotifyOnCrashCheckBox.IsChecked =
+                _preferences.NotifyOnCrash;
+
+            NotifyOnRecoveryCheckBox.IsChecked =
+                _preferences.NotifyOnRecovery;
+
+            NotifyOnHealthWarningCheckBox.IsChecked =
+                _preferences.NotifyOnHealthWarning;
+
+            NotifyOnServerOfflineCheckBox.IsChecked =
+                _preferences.NotifyOnServerOffline;
+        }
+
+        private void DiscordNotificationSettings_Changed(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!IsLoaded)
+            {
+                return;
+            }
+
+            SaveDiscordNotificationPreferences();
+            _preferencesService.Save(_preferences);
+            UpdateDiscordNotificationStatus();
+        }
+
+        private void DiscordWebhookPasswordBox_PasswordChanged(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (!IsLoaded)
+            {
+                return;
+            }
+
+            _preferences.DiscordWebhookUrl =
+                DiscordWebhookPasswordBox.Password.Trim();
+
+            _preferencesService.Save(_preferences);
+            UpdateDiscordNotificationStatus();
+        }
+
+        private void SaveDiscordNotificationPreferences()
+        {
+            _preferences.DiscordNotificationsEnabled =
+                EnableDiscordNotificationsCheckBox.IsChecked == true;
+
+            _preferences.DiscordWebhookUrl =
+                DiscordWebhookPasswordBox.Password.Trim();
+
+            _preferences.NotifyOnCrash =
+                NotifyOnCrashCheckBox.IsChecked == true;
+
+            _preferences.NotifyOnRecovery =
+                NotifyOnRecoveryCheckBox.IsChecked == true;
+
+            _preferences.NotifyOnHealthWarning =
+                NotifyOnHealthWarningCheckBox.IsChecked == true;
+
+            _preferences.NotifyOnServerOffline =
+                NotifyOnServerOfflineCheckBox.IsChecked == true;
+        }
+
+        private void UpdateDiscordNotificationStatus()
+        {
+            if (EnableDiscordNotificationsCheckBox.IsChecked != true)
+            {
+                DiscordNotificationStatusText.Text =
+                    "Discord notifications are disabled.";
+
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    DiscordWebhookPasswordBox.Password))
+            {
+                DiscordNotificationStatusText.Text =
+                    "Discord notifications are enabled, but no webhook URL has been entered.";
+
+                return;
+            }
+
+            DiscordNotificationStatusText.Text =
+                "Discord notifications are enabled.";
+        }
+
+        private async void TestDiscordWebhookButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            SaveDiscordNotificationPreferences();
+            _preferencesService.Save(_preferences);
+
+            if (string.IsNullOrWhiteSpace(
+                    _preferences.DiscordWebhookUrl))
+            {
+                MessageBox.Show(
+                    "Paste a Discord webhook URL first.",
+                    "Webhook Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            TestDiscordWebhookButton.IsEnabled =
+                false;
+
+            try
+            {
+                await _discordWebhookService.SendAsync(
+                    _preferences.DiscordWebhookUrl,
+                    "✅ Pal Server Hub test notification.");
+
+                DiscordNotificationStatusText.Text =
+                    "Test notification sent successfully.";
+
+                AddActivity(
+                    "Discord test notification sent.");
+            }
+            catch (Exception ex)
+            {
+                DiscordNotificationStatusText.Text =
+                    $"Discord test failed: {ex.Message}";
+
+                MessageBox.Show(
+                    "Could not send the Discord test notification.\n\n" +
+                    ex.Message,
+                    "Discord Notification Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                TestDiscordWebhookButton.IsEnabled =
+                    true;
+            }
+        }
+
+        private async Task SendDiscordNotificationAsync(
+            string message)
+        {
+            if (!_preferences.DiscordNotificationsEnabled ||
+                string.IsNullOrWhiteSpace(
+                    _preferences.DiscordWebhookUrl))
+            {
+                return;
+            }
+
+            try
+            {
+                await _discordWebhookService.SendAsync(
+                    _preferences.DiscordWebhookUrl,
+                    message);
+            }
+            catch (Exception ex)
+            {
+                AddActivity(
+                    $"Discord notification failed: {ex.Message}");
+            }
         }
 
         private void BrowseSteamCmdButton_Click(object sender, RoutedEventArgs e)
@@ -3685,8 +4482,8 @@ namespace PalWorldServerManager
                 _preferencesService.Save(_preferences);
 
                 AddActivity(enabled
-                    ? "Windows startup enabled for Palworld Server Manager."
-                    : "Windows startup disabled for Palworld Server Manager.");
+                    ? "Windows startup enabled for Pal Server Hub."
+                    : "Windows startup disabled for Pal Server Hub.");
             }
             catch (Exception ex)
             {
@@ -3801,6 +4598,8 @@ namespace PalWorldServerManager
 
             _preferences.SteamCmdPath =
                 SteamCmdPathTextBox.Text.Trim();
+
+            SaveDiscordNotificationPreferences();
 
             _preferencesService.Save(_preferences);
 
@@ -4228,6 +5027,18 @@ namespace PalWorldServerManager
                 AddActivity(
                     "PalServer stopped unexpectedly or exited.");
 
+                if (_preferences.NotifyOnCrash)
+                {
+                    _ = SendDiscordNotificationAsync(
+                        "🚨 PalServer crashed or exited unexpectedly.");
+                }
+
+                if (_preferences.NotifyOnServerOffline)
+                {
+                    _ = SendDiscordNotificationAsync(
+                        "🔴 Palworld server is offline unexpectedly.");
+                }
+
                 UpdateServerHealthDisplay(
                     "Critical",
                     "PalServer crashed or exited unexpectedly.",
@@ -4456,6 +5267,12 @@ namespace PalWorldServerManager
 
                     AddActivity(
                         $"HEALTH {state.ToUpperInvariant()}: {description}");
+
+                    if (_preferences.NotifyOnHealthWarning)
+                    {
+                        _ = SendDiscordNotificationAsync(
+                            $"⚠️ Palworld server health is {state}: {description}");
+                    }
                 }
             }
             else if (stateChanged &&
